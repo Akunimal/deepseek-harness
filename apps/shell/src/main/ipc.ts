@@ -133,10 +133,11 @@ export function registerIpc(deps: IpcDeps): () => void {
   }));
 
   // ocr:extract — extract text from a base64-encoded image
+  // Cap payload at ~32 MB decoded (base64 string ~43 MB) to prevent renderer abuse.
   ipcMain.handle(IpcChannels.ocrExtract, async (_e, payload: unknown) => {
     const parsed = z.object({
-      imageBase64: z.string().min(1),
-      lang: z.string().optional(),
+      imageBase64: z.string().min(1).max(43_000_000),
+      lang: z.string().max(16).optional(),
     }).parse(payload);
     const buffer = Buffer.from(parsed.imageBase64, 'base64');
     return extractText(buffer, { lang: parsed.lang });

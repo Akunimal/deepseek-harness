@@ -952,7 +952,8 @@ app.whenReady().then(async () => {
     }
   };
   void doRefresh();
-  const refreshIntervalId = setInterval(() => void doRefresh(), REFRESH_INTERVAL_MS);
+  refreshIntervalId = setInterval(() => void doRefresh(), REFRESH_INTERVAL_MS);
+  refreshIntervalId.unref();
 
   // TorFleet — headless Tor SOCKS5 rotation for pool 429 mitigation.
   const tfState = loadTorFleetState(userDataDir);
