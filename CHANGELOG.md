@@ -21,9 +21,11 @@
   off/low/high vocabulary. / La política de razonamiento ahora reconoce modelos
   con thinking de terceros.
 
-- **Upstream sync status** — Documented the gap with upstream deepseek-harness
-  (v0.1.1-rc.2 → v0.1.3-alpha.1). Full sync deferred to v0.6.0.
-  / Documentado el gap con upstream.
+- **Upstream sync** — Full sync of `vendor/deepseek-harness` from upstream
+  `deepseek-ai/deepseek-harness` v0.1.1-rc.2 → v0.1.3-alpha.1 (2063 commits,
+  ~8000 files). Now at parity with upstream master. Local patches re-applied:
+  `windowsHide` in SDK client, `node-pty` ConPTY patch.
+  / Sync completo del vendor con upstream.
 
 ### Fixed / Corregido
 
@@ -58,10 +60,10 @@
 
 ### Deferred / Diferido
 
-- **Upstream sync**: Full sync with deepseek-ai/deepseek-harness deferred to
-  v0.6.0. Current: v0.1.1-rc.2, Upstream: v0.1.3-alpha.1 (~15K commits).
-  Key missing features: hooks stack, filesystem tools, web seam, compaction
-  refactor, todo tool, session fork, Agent.cancel().
+- **Electron desktop build** (`pnpm build:desktop`) — Not executed in this
+  release cycle. Requires runtime bundling.
+- **Tests** — Pre-existing `pnpm test` failure on `link-upstream-workspace-
+  packages.mjs` EACCES. Not related to v0.5.0 changes.
 
 ## 0.4.0 — 2026-08-29
 

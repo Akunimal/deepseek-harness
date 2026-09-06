@@ -12,7 +12,7 @@
 
 1. **Review de código** — Auditoría exhaustiva del codebase completo (56 hallazgos). 6 Critical, 26 Warning, 24 Info. Todos los fixes críticos implementados.
 2. **Reforzar contratos** — ChatMessage cross-validation, FreeCodeApi.restartWorker, Zod validation en IPC, WorkerHandle sync docs.
-3. **Upstream sync** — Gap documentado (v0.1.1-rc.2 → v0.1.3-alpha.1, ~15K commits). Deferred a v0.6.0.
+3. **Upstream sync** — Sync completo de vendor/deepseek-harness de upstream v0.1.1-rc.2 → v0.1.3-alpha.1 (2063 commits, ~8000 archivos). Ahora a paridad con upstream master. Parches locales re-aplicados.
 4. **Reasoning policy** — Soporte para modelos thinking de terceros (mimo-v2.5, qwen*think, gemini*thinking) con vocabulario off/low/high.
 5. **Gemini text-only** — Endpoint Gemini Web documentado como solo texto. defaultInput: ['text'].
 6. **OCR con Tesseract** — Módulo ocr.ts, IPC channels ocr:extract/ocr:status, preload bridge.
@@ -28,10 +28,10 @@
 - Atomic write en model-refresher
 - Memory leak fixes (TorFleet onChange, lb sticky sessions)
 
-### Pendiente para v0.6.0
+### Pendiente para v0.5.0
 
-- Upstream sync completo con deepseek-ai/deepseek-harness
-- Cherry-pick de bugfixes críticos del upstream
+- Build de desktop (`pnpm build:desktop`)
+- GitHub Release con assets
 
 ---
 
