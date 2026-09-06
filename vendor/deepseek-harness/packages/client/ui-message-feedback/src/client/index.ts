@@ -7,20 +7,25 @@
  * @module @deepseek-ai/dsh-client-ui-message-feedback/client
  */
 
-import type { ClientContext, SessionId } from '@deepseek-ai/dsh-client-runtime/client'
+import type { Context as ClientContext } from '@deepseek-ai/cordis'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 // Type-only: pulls the generated Remote API and ctx.remote merge through the Client assembly boundary.
 import type {} from '@deepseek-ai/dsh-api-remotes/client'
 // Type-only: pulls the ui-conversation SlotMap merge (the assistant-actions entry).
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 // Type-only: pulls the locale plugin's Context merge (ctx.locale).
 import type {} from '@deepseek-ai/dsh-client-locale/client'
+// Type-only: pulls the SlotRegistry service merge (ctx.slots).
+import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
+import type {} from '@deepseek-ai/dsh-client-ui-chat/client'
+import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import { MessageFeedbackController } from './controller.ts'
 import { MessageFeedbackActions } from './MessageFeedbackActions.tsx'
 import type { MessageFeedbackInjected } from './slots.ts'
-import { en, es, zh } from './locales.ts'
+import { en, zh } from './locales.ts'
 
 export type {
-  MessageFeedbackActionResult, MessageFeedbackStatus, MessageFeedbackView, MessageFeedbackRemote,
+  MessageFeedbackActionResult, MessageFeedbackStatus, MessageFeedbackView,
 } from './controller.ts'
 export type { MessageFeedbackActionProps, MessageFeedbackInjected } from './slots.ts'
 export type { MessageFeedbackKey } from './locales.ts'
@@ -37,13 +42,13 @@ export const inject = ['slots', 'remote', 'remote.messageFeedback', 'locale']
  * @param ctx - client root context.
  */
 export function apply(ctx: ClientContext): void {
-  ctx.effect(() => ctx.locale.register(NS, { zh, en, es }), 'ui-message-feedback: dictionaries')
+  ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-message-feedback: dictionaries')
 
   const controllers = new Map<SessionId, MessageFeedbackController>()
   const controllerFor = (sessionId: SessionId): MessageFeedbackController => {
     let controller = controllers.get(sessionId)
     if (controller === undefined) {
-      controller = new MessageFeedbackController(ctx.remote.messageFeedback, sessionId)
+      controller = new MessageFeedbackController(ctx, sessionId)
       controllers.set(sessionId, controller)
     }
     return controller

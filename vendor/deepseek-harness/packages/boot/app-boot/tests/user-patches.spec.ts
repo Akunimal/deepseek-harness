@@ -4,11 +4,11 @@
  * a real Loader tree, kept live through transactional HMR.
  */
 
-import { mkdirSync, mkdtempSync, unlinkSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, unlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import Hmr from '@deepseek-ai/cordis-plugin-hmr'
 import Include, { type PatchOptions } from '@deepseek-ai/cordis-plugin-include'
@@ -23,7 +23,16 @@ import {
 
 const NAME = 'dsh-test-bin'
 
-const tmp = (): string => mkdtempSync(join(tmpdir(), 'dsh-user-patches-'))
+const tempRoots: string[] = []
+afterAll(() => {
+  for (const root of tempRoots.splice(0)) rmSync(root, { recursive: true, force: true })
+})
+
+const tmp = (): string => {
+  const dir = mkdtempSync(join(tmpdir(), 'dsh-user-patches-'))
+  tempRoots.push(dir)
+  return dir
+}
 
 async function eventually(test: () => boolean, message: string): Promise<void> {
   const deadline = Date.now() + 10_000
@@ -63,6 +72,31 @@ describe('loadOptionalPatches', () => {
       config: { model: { __jsExpr: 'process.env.DSH_SPEC_MODEL' } },
     })
     expect(patches?.[1]?.insert).toHaveLength(1)
+  })
+
+  it('anchors inserted relative plugins to the patch file and keeps assertion names literal', () => {
+    const dir = tmp()
+    const patchPath = join(dir, PROFILE_PATCH_FILENAME)
+    writeFileSync(patchPath, [
+      '- id: existing',
+      '  name: ./assertion.mjs',
+      '- insert:',
+      '    - id: rule',
+      '      name: ./rule.mjs',
+      '    - id: nested',
+      '      name: cordis:group',
+      '      group: true',
+      '      config:',
+      '        - id: child',
+      '          name: ../child.mjs',
+      '',
+    ].join('\n'))
+
+    const patches = loadOptionalPatches(NAME, patchPath)
+    expect(patches?.[0]?.name).toBe('./assertion.mjs')
+    expect(patches?.[1]?.insert?.[0]?.name).toBe(pathToFileURL(join(dir, 'rule.mjs')).href)
+    expect((patches?.[1]?.insert?.[1]?.config as { name: string }[])[0]?.name)
+      .toBe(pathToFileURL(join(dir, '..', 'child.mjs')).href)
   })
 
   it('fails loud on an unreadable file (a present user patch layer is never skipped)', () => {
@@ -271,6 +305,12 @@ describe('boot with user patches', () => {
   it('applies id-targeted overrides, inserts, and interpolates !!js from the environment', async () => {
     const dir = tmp()
     const userDir = tmp()
+    writeFileSync(join(userDir, 'noop.mjs'), [
+      'export function apply(_ctx, config = {}) {',
+      '  if (config.fail) throw new Error("candidate config failed")',
+      '}',
+      '',
+    ].join('\n'))
     writeFileSync(join(userDir, PROFILE_PATCH_FILENAME), [
       '- id: noop',
       '  name: ./noop.mjs',

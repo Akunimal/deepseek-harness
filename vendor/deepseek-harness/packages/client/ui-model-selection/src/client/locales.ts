@@ -1,8 +1,8 @@
 /**
  * `model` namespace dictionaries.
  *
- * `trigger.selectAria` reads identically to `trigger.fallback` today and is
- * still a separate key: the visible fallback label and the accessible name of
+ * `trigger.selectAria` intentionally matches `trigger.fallback` but remains a
+ * separate key: the visible fallback label and the accessible name of
  * an unset trigger are free to diverge per locale, and folding it into
  * `trigger.aria` would announce the degenerate "Select model, current Select
  * model".
@@ -13,6 +13,7 @@ export const zh = {
   'command.description': '选择本会话使用的模型',
   'option.loadError': '目录加载失败：{message}',
   'trigger.fallback': '选择模型',
+  'trigger.loading': '正在加载模型…',
   'trigger.selectAria': '选择模型',
   'trigger.aria': '选择模型，当前 {model}',
   'trigger.ariaEffort': '选择模型，当前 {model}，推理等级 {effort}',
@@ -37,6 +38,7 @@ export const en = {
   'command.description': 'Select the model for this conversation',
   'option.loadError': 'Catalog failed to load: {message}',
   'trigger.fallback': 'Select model',
+  'trigger.loading': 'Loading models…',
   'trigger.selectAria': 'Select model',
   'trigger.aria': 'Select model, current {model}',
   'trigger.ariaEffort': 'Select model, current {model}, reasoning effort {effort}',
@@ -51,25 +53,4 @@ export const en = {
   'empty.models': 'No models available.',
   'blocked.composer': 'This model is unavailable — select one to continue',
   'empty.efforts': 'This model provides no reasoning effort levels.',
-} satisfies Record<ModelKey, string>
-
-/** Spanish dictionary, checked complete against the key set. */
-export const es = {
-  'command.description': 'Seleccionar el modelo para esta conversación',
-  'option.loadError': 'No se pudo cargar el catálogo: {message}',
-  'trigger.fallback': 'Seleccionar modelo',
-  'trigger.selectAria': 'Seleccionar modelo',
-  'trigger.aria': 'Seleccionar modelo, actual: {model}',
-  'trigger.ariaEffort': 'Seleccionar modelo, actual: {model}, esfuerzo de razonamiento: {effort}',
-  'menu.aria': 'Modelo y esfuerzo de razonamiento',
-  'menu.model': 'Modelo',
-  'menu.effort': 'Esfuerzo',
-  'effort.providerDefault': 'Predeterminado',
-  'status.loading': 'Actualizando la lista de modelos…',
-  'error.action': 'Falló la operación del modelo: {message}',
-  'action.reload': 'Recargar',
-  'warning.groupLoad': 'No se pudo cargar {name}: {message}',
-  'empty.models': 'No hay modelos disponibles.',
-  'blocked.composer': 'Este modelo no está disponible; selecciona uno para continuar',
-  'empty.efforts': 'Este modelo no ofrece niveles de esfuerzo de razonamiento.',
 } satisfies Record<ModelKey, string>

@@ -6,11 +6,14 @@
  */
 // Type-only: pulls the locale plugin's Context merge (ctx.locale).
 import type {} from '@deepseek-ai/dsh-client-locale/client'
-import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
+import type { Context as ClientContext } from '@deepseek-ai/cordis'
+import type {} from '@deepseek-ai/dsh-api-session-controller/client'
+import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
+import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import { InputTriggerService } from './service.ts'
 import type { MenuViewInjected } from './slots.ts'
 import { MenuView } from './MenuView.tsx'
-import { en, es, zh, type MenuKey } from './locales.ts'
+import { en, zh, type MenuKey } from './locales.ts'
 
 export { InputTriggerService } from './service.ts'
 export { InputTriggerController } from './controller.ts'
@@ -20,9 +23,10 @@ export type { MenuViewProps } from './MenuView.tsx'
 export type { MenuKey } from './locales.ts'
 export type {
   ArbitrateKey, ArbitrateOutcome, BeginCommandRequest, CandidateRequest, ClientSessionContext,
-  CommandClaim, ConsumeTokenRequest, InsertReferenceRequest, PickOutcome, PickVia, ReferenceCodec,
-  ReferenceInsert, InputTriggerCandidate, InputTriggerPick, InputTriggerSource, SubmitEnvelope,
-  SubmitImageAttachment, SubmitOutcome, TokenSpan, TriggerChar, TriggerGuard, TriggerPosition,
+  CommandClaim, ConsumeTokenRequest, HeaderRequest, InsertReferenceRequest, PickOutcome, PickVia,
+  ReferenceCodec, ReferenceInsert, InputTriggerCandidate, InputTriggerCrumb, InputTriggerPick,
+  InputTriggerSource, SubmitAttachment, SubmitEnvelope, SubmitOutcome, TokenSpan, TriggerChar,
+  TriggerGuard, TriggerPosition,
 } from '../types.ts'
 export type { DetectTrigger, ExactMatch, MenuEvent, MenuReduce, MenuState, TriggerHit } from '../core/contract.ts'
 export type { InputTriggerServiceContract } from './contract.ts'
@@ -54,7 +58,7 @@ export const inject = ['sessions', 'locale']
  */
 export function apply(ctx: ClientContext): void {
   ctx.plugin(InputTriggerService)
-  ctx.effect(() => ctx.locale.register(MENU_NS, { zh, en, es }), 'ui-input-trigger: menu dictionaries')
+  ctx.effect(() => ctx.locale.register(MENU_NS, { zh, en }), 'ui-input-trigger: menu dictionaries')
   ctx.inject(['slots', 'inputTriggers', 'sessions'], (scope: ClientContext) => {
     const inputTriggers = scope.inputTriggers
     const sessions = scope.sessions
@@ -71,7 +75,10 @@ export function apply(ctx: ClientContext): void {
         const controller = inputTriggers.sessionOf(actx)
         return {
           menu: controller.menu,
-          onPick: (source, index) => { controller.pick(source, index) },
+          headers: controller.headers,
+          onPick: (source, index, action) => { controller.pick(source, index, action) },
+          onCrumb: (source, index) => { controller.pickCrumb(source, index) },
+          onHover: (source, index) => { controller.hover(source, index) },
           onDismiss: () => { controller.dismiss() },
         }
       },

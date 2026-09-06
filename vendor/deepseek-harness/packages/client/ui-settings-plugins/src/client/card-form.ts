@@ -13,8 +13,8 @@
  * override equal to the composition default is still an override.
  */
 
-import type { SettingsScope, SettingsScopeSnapshot } from '@deepseek-ai/dsh-client-runtime/client'
-import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
+import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-store'
+import type { SettingsScope, SettingsScopeSnapshot } from '@deepseek-ai/dsh-client-ui-settings/client'
 
 /** The write one field's staged text performs when the card is saved. */
 export type FieldWrite =
@@ -141,19 +141,6 @@ export function textField(field: string): CardFieldSpec {
     parse: (text) => {
       const trimmed = text.trim()
       return trimmed === '' ? { kind: 'clear' } : { kind: 'set', value: trimmed }
-    },
-  }
-}
-
-/** A boolean field rendered by a checkbox/toggle control. */
-export function booleanField(field: string): CardFieldSpec {
-  return {
-    field,
-    format: value => typeof value === 'boolean' ? String(value) : '',
-    parse: (text) => {
-      if (text === 'true') return { kind: 'set', value: true }
-      if (text === 'false') return { kind: 'set', value: false }
-      return undefined
     },
   }
 }

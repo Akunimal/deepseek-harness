@@ -1,7 +1,8 @@
 /** The shell card's staged form over the `bash` settings namespace. */
 
-import type { SettingsScope, SnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
-import { booleanField, CardForm, numberField, type CardActions, type CardFieldState, type CardShell } from './card-form.ts'
+import type { SnapshotStore } from '@deepseek-ai/dsh-client-store'
+import type { SettingsScope } from '@deepseek-ai/dsh-client-ui-settings/client'
+import { CardForm, numberField, type CardActions, type CardFieldState, type CardShell } from './card-form.ts'
 
 /**
  * Namespace of the shell capability. Spelled here rather than imported: a
@@ -16,10 +17,6 @@ export interface BashSettings {
   timeoutMs?: number
   /** Per-stream in-memory output cap in bytes. */
   maxOutputBytes?: number
-  /** Whether to use an installed RTK binary for eligible commands. */
-  rtk?: boolean
-  /** Whether to use an installed Caveman binary for context compression. */
-  caveman?: boolean
 }
 
 /** What the shell card renders. */
@@ -28,10 +25,6 @@ export interface BashCardState extends CardShell {
   timeoutMs: CardFieldState
   /** Per-stream output cap in bytes. */
   maxOutputBytes: CardFieldState
-  /** Optional RTK output compression toggle. */
-  rtk: CardFieldState
-  /** Optional Caveman context compression toggle. */
-  caveman: CardFieldState
 }
 
 /** The registration-side face the shell card's slot entry injects. */
@@ -49,7 +42,7 @@ export class BashCardController {
 
   /** @param scope - the bound settings scope for the `bash` namespace. */
   constructor(scope: SettingsScope<BashSettings>) {
-    this.form = new CardForm(scope, [numberField('timeoutMs'), numberField('maxOutputBytes'), booleanField('rtk'), booleanField('caveman')])
+    this.form = new CardForm(scope, [numberField('timeoutMs'), numberField('maxOutputBytes')])
     this.store = this.form.bind(() => this.projection())
   }
 
@@ -58,8 +51,6 @@ export class BashCardController {
       ...this.form.shell(),
       timeoutMs: this.form.field('timeoutMs'),
       maxOutputBytes: this.form.field('maxOutputBytes'),
-      rtk: this.form.field('rtk'),
-      caveman: this.form.field('caveman'),
     }
   }
 

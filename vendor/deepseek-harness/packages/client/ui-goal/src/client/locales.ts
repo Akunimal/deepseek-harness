@@ -6,7 +6,7 @@ export const zh = {
   'phase.paused': '已暂停的目标',
   'phase.blocked': '受阻的目标',
   'objective.aria': '目标内容',
-  'commandInput.aria': '命令输入',
+  'commandInput.aria': '指令输入',
   'action.save': '保存目标',
   'action.cancel': '取消编辑',
   'action.pause': '暂停目标',
@@ -31,19 +31,4 @@ export const en = {
   'action.resume': 'Resume goal',
   'action.edit': 'Edit goal',
   'action.clear': 'Clear goal',
-} satisfies Record<GoalKey, string>
-
-/** Spanish dictionary, checked complete against the key set. */
-export const es = {
-  'phase.active': 'Objetivo en curso',
-  'phase.paused': 'Objetivo pausado',
-  'phase.blocked': 'Objetivo bloqueado',
-  'objective.aria': 'Objetivo de la meta',
-  'commandInput.aria': 'Entrada de comandos',
-  'action.save': 'Guardar objetivo',
-  'action.cancel': 'Cancelar edición',
-  'action.pause': 'Pausar objetivo',
-  'action.resume': 'Reanudar objetivo',
-  'action.edit': 'Editar objetivo',
-  'action.clear': 'Borrar objetivo',
 } satisfies Record<GoalKey, string>

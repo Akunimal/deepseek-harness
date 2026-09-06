@@ -1,7 +1,7 @@
 /** The shell plugin's card: the limits every command the agent runs is bound by. */
 
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
-import { ToggleField, ValueField } from './fields.tsx'
+import { ValueField } from './fields.tsx'
 import { PluginCard } from './PluginCard.tsx'
 import type { BashCardFace } from './bash-card-controller.ts'
 import type {} from './slot-contract.ts'
@@ -55,32 +55,6 @@ export function BashCard(props: BashCardProps) {
         {...state.maxOutputBytes}
         onEdit={(text) => { props.edit('maxOutputBytes', text) }}
         onReset={() => { props.resetField('maxOutputBytes') }}
-      />
-      <ToggleField
-        id="plugin-config-bash-rtk"
-        label={t('bashRtk')}
-        hint={t('bashRtkHint')}
-        overriddenLabel={t('overridden')}
-        resetLabel={t('reset')}
-        invalidLabel={t('invalidNumber')}
-        disabled={disabled}
-        checked={state.rtk.text === 'true'}
-        {...state.rtk}
-        onEdit={(text) => { props.edit('rtk', text) }}
-        onReset={() => { props.resetField('rtk') }}
-      />
-      <ToggleField
-        id="plugin-config-bash-caveman"
-        label={t('bashCaveman')}
-        hint={t('bashCavemanHint')}
-        overriddenLabel={t('overridden')}
-        resetLabel={t('reset')}
-        invalidLabel={t('invalidNumber')}
-        disabled={disabled}
-        checked={state.caveman.text === 'true'}
-        {...state.caveman}
-        onEdit={(text) => { props.edit('caveman', text) }}
-        onReset={() => { props.resetField('caveman') }}
       />
     </PluginCard>
   )

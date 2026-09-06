@@ -150,9 +150,9 @@ export async function pickWin32Directory(
         reject(error)
       })
     })
-    worker.on('exit', (code: number) => {
+    worker.on('exit', () => {
       settle(() => {
-        reject(new Error(`win32 folder dialog worker exited before reporting a result (code=${code})`))
+        reject(new Error('win32 folder dialog worker exited before reporting a result'))
       })
     })
   })

@@ -17,10 +17,10 @@
    design (see this package's README), so the two import the same seam surface */
 import { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
-import { resolveRtk, resolveCaveman, SHELL_SETTINGS_NAMESPACE, ShellExecutor, wrapWithRtk, wrapWithCaveman } from '@deepseek-ai/dsh-shell'
+import { SHELL_SETTINGS_NAMESPACE, ShellExecutor } from '@deepseek-ai/dsh-shell'
 import type { ShellExecRequest, ShellExecSpec, ShellProcess, ShellProcessRead, ShellRunResult, CollectedOutput } from '@deepseek-ai/dsh-shell'
 import type { SubprocessCollect, SubprocessHandle, SubprocessOutputReader, SubprocessSpawnSpec } from '@deepseek-ai/dsh-subprocess'
-import { installSettingsSection } from '@deepseek-ai/dsh-settings'
+import type {} from '@deepseek-ai/dsh-settings'
 import { clampTimeout, deadline, MAX_TIMER_DELAY_MS, timeoutOf } from '@deepseek-ai/dsh-timeout'
 /* jscpd:ignore-end */
 import { resolvePwshPath } from './resolve.ts'
@@ -68,10 +68,6 @@ export interface Config {
   maxSpillBytes?: number
   /** Grace period for kill escalation and inherited pipes; at most `MAX_TIMER_DELAY_MS`. */
   graceMs?: number
-  /** Use an already-installed RTK binary to compress eligible CLI output. */
-  rtk?: boolean
-  /** Use an installed Caveman binary to compress context output. */
-  caveman?: boolean
   /**
    * Explicit pwsh executable. When omitted, well-known Windows install
    * locations and PATH entries are probed in order (PowerShell 7 install,
@@ -140,8 +136,6 @@ export class PwshLocalExecutor extends ShellExecutor {
     maxSpillBytes: z.number().default(DEFAULT_MAX_SPILL_BYTES),
     graceMs: z.number().default(DEFAULT_GRACE_MS),
     pwshPath: z.string(),
-    rtk: z.boolean().default(true),
-    caveman: z.boolean().default(false),
   })
 
   /** The currently authoritative config: the settings section, or the composition entry. */
@@ -152,12 +146,6 @@ export class PwshLocalExecutor extends ShellExecutor {
 
   /** The pwsh executable resolved from the current config. */
   private resolvedPwshPath: string
-
-  /** Cached because probing PATH for every command would add avoidable latency. */
-  private readonly rtkInstalled: boolean
-
-  /** Cached Caveman binary detection. */
-  private readonly cavemanInstalled: boolean
 
   /** Validated config (schemastery applied the defaults before construction). */
   get config(): ResolvedConfig {
@@ -177,21 +165,21 @@ export class PwshLocalExecutor extends ShellExecutor {
     this.source = () => entry
     this.declaredPwshPath = entry.pwshPath
     this.resolvedPwshPath = resolvePwshPath(entry.pwshPath)
-    this.rtkInstalled = resolveRtk()
-    this.cavemanInstalled = resolveCaveman()
-    installSettingsSection(ctx, SHELL_SETTINGS_NAMESPACE, PwshLocalExecutor.Config, entry, {
-      validate: assertServiceablePwshConfig,
-      setSource: (current) => {
-        this.source = current as () => ResolvedConfig
-      },
-      // Probing the filesystem is the one fact derived from the source: every
-      // other field is read through the getter at each command.
-      onChange: () => {
-        const declared = this.source().pwshPath
-        if (declared === this.declaredPwshPath) return
-        this.declaredPwshPath = declared
-        this.resolvedPwshPath = resolvePwshPath(declared)
-      },
+    ctx.inject(['settings'], (settingsCtx) => {
+      settingsCtx.settings.installSection(ctx, SHELL_SETTINGS_NAMESPACE, PwshLocalExecutor.Config, entry, {
+        validate: assertServiceablePwshConfig,
+        setSource: (current) => {
+          this.source = current as () => ResolvedConfig
+        },
+        // Probing the filesystem is the one fact derived from the source: every
+        // other field is read through the getter at each command.
+        onChange: () => {
+          const declared = this.source().pwshPath
+          if (declared === this.declaredPwshPath) return
+          this.declaredPwshPath = declared
+          this.resolvedPwshPath = resolvePwshPath(declared)
+        },
+      })
     })
   }
 
@@ -210,10 +198,7 @@ export class PwshLocalExecutor extends ShellExecutor {
     const stdoutMaxBytes = request.stdoutMaxBytes ?? this.config.maxOutputBytes
     assertPositiveFinite('request.stdoutMaxBytes', stdoutMaxBytes)
     return {
-      command: wrapWithCaveman(
-        wrapWithRtk(request.command, this.config.rtk === true && this.rtkInstalled),
-        this.config.caveman === true && this.cavemanInstalled
-      ),
+      command: request.command,
       workdir: request.workdir ?? this.config.cwd ?? process.cwd(),
       timeoutMs,
       stdoutMaxBytes,

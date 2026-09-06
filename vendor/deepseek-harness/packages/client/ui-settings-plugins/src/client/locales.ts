@@ -5,13 +5,18 @@ export type PluginsSettingsLocaleKey =
   | 'nav' | 'title' | 'intro' | 'tabs' | 'configurableTab' | 'empty'
   | 'overridden' | 'reset' | 'readOnly' | 'expand' | 'collapse'
   | 'save' | 'saving' | 'discard' | 'unsaved' | 'saveFailed' | 'invalidNumber'
-  | 'bashTitle' | 'bashDescription' | 'bashTimeoutMs' | 'bashTimeoutMsHint' | 'bashRtk' | 'bashRtkHint'
-  | 'bashCaveman' | 'bashCavemanHint'
+  | 'bashTitle' | 'bashDescription' | 'bashTimeoutMs' | 'bashTimeoutMsHint'
   | 'bashMaxOutputBytes' | 'bashMaxOutputBytesHint'
   | 'agentLoopTitle' | 'agentLoopDescription' | 'agentLoopMaxParallel' | 'agentLoopMaxParallelHint'
   | 'webSearchTitle' | 'webSearchDescription'
   | 'webSearchApiKey' | 'webSearchApiKeyHint' | 'webSearchApiKeySet' | 'webSearchApiKeyUnset'
   | 'webSearchBaseUrl' | 'webSearchBaseUrlHint' | 'webSearchMaxUses' | 'webSearchMaxUsesHint'
+  | 'subagentModelSelectionTitle' | 'subagentModelSelectionDescription'
+  | 'subagentModelSelectionToggle' | 'subagentModelSelectionChoose' | 'subagentModelSelectionAllowed'
+  | 'subagentModelSelectionLoading' | 'subagentModelSelectionLoadFailed' | 'subagentModelSelectionRetry'
+  | 'subagentModelSelectionPartial' | 'subagentModelSelectionUnavailable'
+  | 'subagentModelSelectionUnavailableGroup' | 'subagentModelSelectionEmpty'
+  | 'subagentModelSelectionRequired' | 'subagentModelSelectionConflict' | 'subagentModelSelectionOff'
 
 /** English copy. */
 export const en: Record<PluginsSettingsLocaleKey, string> = {
@@ -38,10 +43,6 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   bashTimeoutMsHint: 'How long one command may run before it is terminated.',
   bashMaxOutputBytes: 'Output cap per stream (bytes)',
   bashMaxOutputBytesHint: 'Output beyond this spills to a temporary file rather than being lost.',
-  bashRtk: 'Use RTK token compression',
-  bashRtkHint: 'Uses an already-installed RTK for eligible simple CLI commands. Missing RTK changes nothing.',
-  bashCaveman: 'Use Caveman context compression',
-  bashCavemanHint: 'Compresses command output context for token savings. Requires Caveman installed separately.',
   agentLoopTitle: 'Agent loop',
   agentLoopDescription: 'How the agent dispatches tool calls.',
   agentLoopMaxParallel: 'Parallel tool calls',
@@ -56,6 +57,21 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   webSearchBaseUrlHint: 'Leave blank to use the provider default.',
   webSearchMaxUses: 'Max searches per request',
   webSearchMaxUsesHint: 'How many times one request may search before it must answer.',
+  subagentModelSelectionTitle: 'Subagent',
+  subagentModelSelectionDescription: 'Control which models agents may choose for subagents.',
+  subagentModelSelectionToggle: 'Allow agents to choose models for subagents',
+  subagentModelSelectionChoose: 'When enabled, agents can choose a provider, model, and reasoning effort for each subagent from the authorized models below. Applies only to new sessions.',
+  subagentModelSelectionAllowed: 'Models agents may choose',
+  subagentModelSelectionLoading: 'Loading models…',
+  subagentModelSelectionLoadFailed: 'Models could not be loaded.',
+  subagentModelSelectionRetry: 'Retry',
+  subagentModelSelectionPartial: 'Some model providers could not be loaded; saved choices remain removable.',
+  subagentModelSelectionUnavailable: 'Currently unavailable',
+  subagentModelSelectionUnavailableGroup: 'Saved but currently unavailable',
+  subagentModelSelectionEmpty: 'No model provider currently advertises a model.',
+  subagentModelSelectionRequired: 'Select at least one model before saving.',
+  subagentModelSelectionConflict: 'Settings changed elsewhere. Discard your draft and try again.',
+  subagentModelSelectionOff: 'Subagents use configured defaults or inherit the parent agent\'s model. Saved model choices are retained.',
 }
 
 /** Simplified Chinese copy. */
@@ -83,10 +99,6 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   bashTimeoutMsHint: '单条命令允许运行多久，超时即终止。',
   bashMaxOutputBytes: '单流输出上限（字节）',
   bashMaxOutputBytesHint: '超出部分会转存到临时文件，而不是被丢弃。',
-  bashRtk: '使用 RTK 压缩令牌',
-  bashRtkHint: '对符合条件的简单 CLI 命令使用已安装的 RTK。未安装 RTK 时不会改变任何行为。',
-  bashCaveman: '使用 Caveman 上下文压缩',
-  bashCavemanHint: '压缩命令输出上下文以节省 token。需要单独安装 Caveman。',
   agentLoopTitle: 'Agent 循环',
   agentLoopDescription: 'Agent 如何派发工具调用。',
   agentLoopMaxParallel: '并行工具调用数',
@@ -101,49 +113,19 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   webSearchBaseUrlHint: '留空则使用提供方默认地址。',
   webSearchMaxUses: '单次请求最多搜索次数',
   webSearchMaxUsesHint: '一次请求在必须作答前最多可以搜索多少次。',
-}
-
-/** Spanish copy. */
-export const es: Record<PluginsSettingsLocaleKey, string> = {
-  nav: 'Complementos',
-  title: 'Complementos',
-  intro: 'Configura y revisa los complementos instalados en esta implementación.',
-  tabs: 'Vistas de complementos',
-  configurableTab: 'Configuración de complementos',
-  empty: 'Esta implementación no expone ajustes de complementos.',
-  overridden: 'Sobrescrito',
-  reset: 'Restaurar predeterminado',
-  readOnly: 'Esta implementación almacena la configuración en modo de solo lectura.',
-  expand: 'Mostrar configuración',
-  collapse: 'Ocultar configuración',
-  save: 'Guardar',
-  saving: 'Guardando…',
-  discard: 'Descartar',
-  unsaved: 'Sin guardar',
-  saveFailed: 'La implementación no aceptó estos valores; corrígelos.',
-  invalidNumber: 'Introduce un número o déjalo vacío para usar el valor predeterminado.',
-  bashTitle: 'Shell',
-  bashDescription: 'Limita cada comando que ejecuta el agente.',
-  bashTimeoutMs: 'Tiempo de espera del comando (ms)',
-  bashTimeoutMsHint: 'Cuánto puede ejecutarse un comando antes de terminarlo.',
-  bashMaxOutputBytes: 'Límite de salida por flujo (bytes)',
-  bashMaxOutputBytesHint: 'El excedente se guarda en un archivo temporal en lugar de perderse.',
-  bashRtk: 'Usar compresión de tokens RTK',
-  bashRtkHint: 'Usa un RTK ya instalado para comandos CLI simples compatibles. Si no existe RTK, no cambia nada.',
-  bashCaveman: 'Usar compresión de contexto Caveman',
-  bashCavemanHint: 'Comprime la salida de comandos para ahorrar tokens. Requiere Caveman instalado por separado.',
-  agentLoopTitle: 'Bucle del agente',
-  agentLoopDescription: 'Cómo distribuye el agente las llamadas a herramientas.',
-  agentLoopMaxParallel: 'Llamadas paralelas a herramientas',
-  agentLoopMaxParallelHint: 'Límite de llamadas seguras en paralelo que se ejecutan a la vez en un paso.',
-  webSearchTitle: 'Búsqueda web',
-  webSearchDescription: 'El proveedor de búsqueda de DeepSeek.',
-  webSearchApiKey: 'Clave API',
-  webSearchApiKeyHint: 'Se almacena fuera del archivo de configuración. Déjala vacía para conservar la clave actual.',
-  webSearchApiKeySet: 'Hay una clave configurada.',
-  webSearchApiKeyUnset: 'No hay una clave configurada; la búsqueda no estará disponible hasta añadirla.',
-  webSearchBaseUrl: 'Punto de acceso',
-  webSearchBaseUrlHint: 'Déjalo vacío para usar el valor predeterminado del proveedor.',
-  webSearchMaxUses: 'Máximo de búsquedas por solicitud',
-  webSearchMaxUsesHint: 'Cuántas veces puede buscar una solicitud antes de responder.',
+  subagentModelSelectionTitle: 'Subagent',
+  subagentModelSelectionDescription: '控制 Agent 为 Subagent 选择模型的权限。',
+  subagentModelSelectionToggle: '允许 Agent 为 Subagent 选择模型',
+  subagentModelSelectionChoose: '开启后，Agent 可以从下方授权模型中，为每个 Subagent 选择提供方、模型和推理强度。仅影响新会话。',
+  subagentModelSelectionAllowed: 'Agent 可选择的模型',
+  subagentModelSelectionLoading: '正在加载模型…',
+  subagentModelSelectionLoadFailed: '无法加载模型。',
+  subagentModelSelectionRetry: '重试',
+  subagentModelSelectionPartial: '部分模型提供方暂时无法加载；已保存的选择仍可移除。',
+  subagentModelSelectionUnavailable: '当前不可用',
+  subagentModelSelectionUnavailableGroup: '已保存但当前不可用',
+  subagentModelSelectionEmpty: '当前没有模型提供方公布模型。',
+  subagentModelSelectionRequired: '保存前请至少选择一个模型。',
+  subagentModelSelectionConflict: '设置已在其他位置更新。请放弃修改后重试。',
+  subagentModelSelectionOff: '关闭后，Subagent 使用配置的默认模型或继承父 Agent 的模型；已选模型会保留。',
 }
