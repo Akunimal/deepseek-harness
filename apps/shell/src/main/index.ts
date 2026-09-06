@@ -696,9 +696,23 @@ function runLocalUpstreamUpdate(): void {
   localUpdateRunning = true;
   const script = resolve(projectRoot(), 'scripts/update-upstream-local.mjs');
   const node = resolveNodePath({ packaged: false });
+  // Whitelist safe env vars — don't leak Electron internals or API keys to the
+  // child process (matches the pattern used by harness-supervisor and gemini supervisor).
+  const UPDATE_SAFE_ENV_KEYS = [
+    'PATH', 'HOME', 'USER', 'USERPROFILE', 'HOMEDRIVE', 'HOMEPATH', 'TEMP', 'TMP', 'TMPDIR',
+    'SYSTEMROOT', 'WINDIR', 'COMSPEC', 'PROGRAMFILES', 'PROGRAMFILES(X86)', 'LOCALAPPDATA',
+    'APPDATA', 'COMMONPROGRAMFILES', 'ProgramData', 'GIT_EXEC_PATH', 'GIT_TEMPLATE_DIR',
+    'GIT_CONFIG_NOSYSTEM', 'HOME', 'NODE_OPTIONS',
+  ] as const;
+  const safeEnv: Record<string, string> = {};
+  for (const key of UPDATE_SAFE_ENV_KEYS) {
+    const val = process.env[key];
+    if (val !== undefined) safeEnv[key] = val;
+  }
+  safeEnv.CI = process.env.CI ?? 'true';
   const child = spawn(node, [script], {
     cwd: projectRoot(),
-    env: { ...process.env, CI: process.env.CI ?? 'true' },
+    env: safeEnv,
     stdio: 'ignore',
     windowsHide: true,
   });
@@ -1048,6 +1062,7 @@ app.whenReady().then(async () => {
       isEnabled: () => torfleetEnabled,
     },
     reportModelRefreshFailure,
+    triggerRefresh: async () => { await doRefresh(); return catalog!; },
     setLocale: applyNativeLocale,
     // The harness page renders in a nested WebContentsView, so
     // mainWindow.webContents (the default target) is blank. Route pushes

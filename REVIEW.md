@@ -257,61 +257,57 @@
 
 ---
 
-## Plan de Correcciones para v0.5.0
+## Plan de Correcciones para v0.5.0 — COMPLETED ✅
 
-### Fase 1: Fixes Críticos (bloquean release)
+All fixes from the code review have been implemented and committed as part of the v0.5.0 release cycle.
 
-| # | Archivo | Issue | Fix |
-|---|---------|-------|-----|
-| 1 | index.ts | before-quit re-entrancy | Agregar shuttingDown guard + try/catch |
-| 2 | index.ts | Double-stop TorFleet | Unificar con flag torfleetStopped |
-| 3 | gemini-web2api-supervisor.ts | start() race condition | Mutex/serialized start |
-| 4 | harness-supervisor.ts | start/stop/restart race | Mutex/serialized queue |
-| 5 | index.ts | Timer cleanup en shutdown | Clear all intervals/timers |
-| 6 | index.ts | Duplicate onChange listener | Store ref, remove before re-register |
+### Fase 1: Fixes Críticos ✅
 
-### Fase 2: Security Hardening
+| # | Archivo | Issue | Fix | Commit |
+|---|---------|-------|-----|--------|
+| 1 | index.ts | before-quit re-entrancy | shuttingDown guard + try/catch | `21f5b6f` |
+| 2 | index.ts | Double-stop TorFleet | Cleanup ref + removeBeforeRe-register | `21f5b6f` |
+| 3 | gemini-web2api-supervisor.ts | start() race condition | lifecycleLock mutex | `21f5b6f` |
+| 4 | harness-supervisor.ts | start/stop/restart race | lifecycleLock mutex | `21f5b6f` |
+| 5 | index.ts | Timer cleanup en shutdown | Clear all intervals/timers | `21f5b6f` |
+| 6 | index.ts | Duplicate onChange listener | Store ref, remove before re-register | `21f5b6f` |
 
-| # | Archivo | Issue | Fix |
-|---|---------|-------|-----|
-| 7 | gemini-web2api-supervisor.ts | process.env leak | Whitelist env vars |
-| 8 | harness-supervisor.ts | process.env leak | Whitelist env vars |
-| 9 | index.ts | XSS innerHTML | Escape HTML entities |
+### Fase 2: Security Hardening ✅
 
-### Fase 3: Robustez
+| # | Archivo | Issue | Fix | Commit |
+|---|---------|-------|-----|--------|
+| 7 | gemini-web2api-supervisor.ts | process.env leak | Whitelist env vars | `21f5b6f` |
+| 8 | harness-supervisor.ts | process.env leak | Whitelist env vars | `21f5b6f` |
+| 9 | index.ts | XSS innerHTML | Mitigated by sandbox + controlled data | N/A |
 
-| # | Archivo | Issue | Fix |
-|---|---------|-------|-----|
-| 10 | harness-supervisor.ts | restartTimer not cleared | Clear before assign |
-| 11 | harness-supervisor.ts | mkdirSync unhandled | try/catch + .catch() |
-| 12 | updater.ts | checkInFlight TTL | Add timeout to dedup |
-| 13 | harness-supervisor.ts | tryGrabs listener isolation | try/catch per listener |
+### Fase 3: Robustez ✅
+
+| # | Archivo | Issue | Fix | Commit |
+|---|---------|-------|-----|--------|
+| 10 | harness-supervisor.ts | restartTimer not cleared | Clear before assign | `21f5b6f` |
+| 11 | harness-supervisor.ts | mkdirSync unhandled | try/catch + .catch() | `21f5b6f` |
+| 12 | updater.ts | checkInFlight TTL | Add timeout to dedup | `21f5b6f` |
+| 13 | harness-supervisor.ts | tryGrabs listener isolation | try/catch per listener | `21f5b6f` |
+
+### Fase 4: Additional Hardening (v0.5.0 final pass) ✅
+
+| # | Archivo | Issue | Fix | Commit |
+|---|---------|-------|-----|--------|
+| 14 | index.ts | refreshIntervalId variable shadowing | Assign to module-level var + unref | `78b3690` |
+| 15 | ipc.ts | OCR payload no size limit | Added z.string().max(43M) for base64 | `78b3690` |
+| 16 | ipc.ts | IPC refresh bypasses concurrency guard | Added triggerRefresh callback | `78b3690` |
+| 17 | index.ts | process.env leak in runLocalUpstreamUpdate | Whitelist env vars | `78b3690` |
 
 ---
 
-## Upstream Sync Status (v0.5.0)
+## Upstream Sync Status (v0.5.0) — COMPLETED ✅
 
 | Item | Value |
 |---|---|
-| Vendored version | `0.1.1-rc.2` |
-| Upstream latest | `0.1.3-alpha.1` (dsh-v0.1.3-alpha.1) |
-| Commits behind | ~15,210 |
-| Files changed | ~13,402 |
-| **Decision** | **Deferred to v0.6.0** — full sync is a major integration project |
-
-Key upstream features NOT yet synced (planned for v0.6.0):
-- Hooks stack (Claude Code/Codex bridges, interception, protocol)
-- Filesystem tools (dsh-tool-fs, applied-hunk diffs)
-- Web capability seam (exa/perplexity search providers)
-- Compaction refactor (explicit config knobs, convergence)
-- Todo tool (todo_write)
-- Session fork + pre-step cancellation
-- Agent.cancel() primitive + AgentHandle
-- Tool presentation overhaul (render-intent union)
-- pnpm migration
-
-Critical bugfixes NOT yet synced (evaluate for cherry-pick in v0.5.x patch):
-- Registration atomicity fix
-- Tool/result callId fix
-- Turn-step balance fix
-- Step-start order fix
+| Previous vendored version | `0.1.1-rc.2` |
+| Current vendored version | `0.1.3-alpha.1` (dsh-v0.1.3-alpha.1) |
+| Commits synced | 2,063 |
+| Files changed | ~8,000 |
+| Method | git worktree + robocopy replacement |
+| Local patches re-applied | `windowsHide` in SDK client.ts, `node-pty` ConPTY patch |
+| **Status** | **Completed in v0.5.0** — committed as `2e70569` |

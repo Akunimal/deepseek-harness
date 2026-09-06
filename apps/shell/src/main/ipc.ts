@@ -4,6 +4,7 @@ import {
   IpcPayloads,
   ModelCatalogSchema,
   WorkerHandleSchema,
+  type ModelCatalog,
 } from '@freecode/shared-types';
 import { ShellRuntime } from './runtime.js';
 import { detectLocalRoutes } from './omniroute-detector.js';
@@ -36,6 +37,10 @@ export interface IpcDeps {
     isEnabled(): boolean;
   };
   reportModelRefreshFailure?: (error: unknown) => void;
+  /** Trigger a guarded model refresh (shares the refreshInFlight mutex with the
+   *  timer). IPC calls this instead of refreshModels() directly to prevent
+   *  concurrent reads and writes to settings.yaml. Returns the catalog. */
+  triggerRefresh?: () => Promise<ModelCatalog>;
   setLocale: (locale: 'zh' | 'en' | 'es') => void;
   /** Optional override for renderer broadcast targets. Defaults to every
    *  BrowserWindow's built-in webContents. When the harness runs inside a
@@ -63,10 +68,13 @@ export function registerIpc(deps: IpcDeps): () => void {
   };
   const offChange = runtime.pool.onWorkerChange(() => emitStatus());
 
-  // models:refresh (invoke)
+  // models:refresh (invoke) — route through guarded path when available to
+  // prevent concurrent settings.yaml writes with the timer.
   ipcMain.handle(IpcChannels.modelsRefresh, async () => {
     try {
-      const catalog = await refreshModels({
+      const catalog = deps.triggerRefresh
+        ? await deps.triggerRefresh()
+        : await refreshModels({
         lbBaseUrl,
         homeDir,
         userDataDir,

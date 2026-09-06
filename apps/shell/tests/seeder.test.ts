@@ -31,11 +31,11 @@ describe('provider-seeder', () => {
     // reasoning removed from provider level — each model carries its own capability.
     expect(p.reasoning).toBeUndefined();
     const gemini = settings['llm-pi-ai'].providers['gemini-web'];
-    expect(gemini.displayName).toBe('Gemini Web (local)');
+    expect(gemini.displayName).toBe('Gemini Web (local — text-only queries)');
     expect(gemini.api).toBe('openai-completions');
     expect(gemini.baseURL).toBe('http://127.0.0.1:8081/v1');
     expect(gemini.headers).toEqual({ Authorization: 'Bearer freecode-local' });
-    expect(gemini.defaultInput).toEqual(['text', 'image']);
+    expect(gemini.defaultInput).toEqual(['text']);
     expect(gemini.models).toEqual([
       { id: 'gemini-3.7-flash', reasoningEfforts: false },
       { id: 'gemini-3.6-flash', reasoningEfforts: false },
