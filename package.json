@@ -17,7 +17,8 @@
     "build:shell": "pnpm --filter @freecode/shell build",
     "package:runtime": "node scripts/run-package-runtime.mjs",
     "build:desktop": "pnpm build && pnpm package:runtime && pnpm --filter @freecode/shell package",
-    "release:gate": "node scripts/release-gate.mjs"
+    "release:gate": "node scripts/release-gate.mjs",
+    "setup:mcp": "node scripts/setup-mcp-servers.mjs --all"
   },
   "devDependencies": {
     "@types/node": "^24.13.3",
