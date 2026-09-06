@@ -1,6 +1,9 @@
 /**
  * Contracts for the opencode2api worker pool.
  * Schema per PLAN FASE 3 (packages/opencode-adapter).
+ *
+ * NOTE: WorkerHandle is mirrored in @freecode/shared-types. Keep both in sync.
+ * The shared-types version includes Zod validation schemas for IPC payloads.
  */
 
 export type WorkerStatus = 'starting' | 'ready' | 'unhealthy' | 'stopped';

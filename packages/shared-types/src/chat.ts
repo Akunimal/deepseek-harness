@@ -19,7 +19,13 @@ export const ChatMessageSchema = z.object({
   toolCalls: z.array(z.object({ id: z.string(), name: z.string(), input: z.record(z.string(), z.unknown()) })).optional(),
   toolResults: z.array(z.object({ id: z.string(), output: z.string(), isError: z.boolean() })).optional(),
   timestamp: z.number().optional(),
-});
+}).refine(
+  (msg) => !(msg.toolCalls && msg.toolCalls.length > 0 && msg.role !== 'assistant'),
+  { message: 'toolCalls are only valid on assistant messages' },
+).refine(
+  (msg) => !(msg.toolResults && msg.toolResults.length > 0 && msg.role !== 'tool'),
+  { message: 'toolResults are only valid on tool messages' },
+);
 export type ChatMessage = z.infer<typeof ChatMessageSchema>;
 
 /** InterchangeChat — universal import/export format for chat history. */

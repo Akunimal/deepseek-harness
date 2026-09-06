@@ -84,6 +84,7 @@ export interface FreeCodeApi {
   pool: {
     onStatus(cb: (payload: IpcPayloads[typeof IpcChannels.poolStatus]) => void): () => void;
     resize(size: number): Promise<void>;
+    restartWorker(id: string): Promise<void>;
   };
   models: {
     refresh(): Promise<ModelCatalog>;
