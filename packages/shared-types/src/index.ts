@@ -60,6 +60,8 @@ export const IpcChannels = {
   torfleetEnable: 'torfleet:enable',
   torfleetStatus: 'torfleet:status',
   localeSet: 'locale:set',
+  ocrExtract: 'ocr:extract',
+  ocrStatus: 'ocr:status',
 } as const;
 
 export type IpcChannels = typeof IpcChannels;
@@ -77,6 +79,16 @@ export interface IpcPayloads {
   [IpcChannels.torfleetEnable]: { enabled: boolean };
   [IpcChannels.torfleetStatus]: { enabled: boolean; instances: TorInstance[] };
   [IpcChannels.localeSet]: { locale: 'zh' | 'en' | 'es' };
+  [IpcChannels.ocrExtract]: { imageBase64: string; lang?: string };
+  [IpcChannels.ocrStatus]: { available: boolean; binaryPath: string | null };
+}
+
+/** OCR result returned from ocr:extract. */
+export interface OcrResult {
+  text: string;
+  confidence: number;
+  language: string;
+  durationMs: number;
 }
 
 /** The API surface exposed on window.freecode by the preload bridge. */
@@ -105,6 +117,10 @@ export interface FreeCodeApi {
   };
   locale: {
     set(locale: 'zh' | 'en' | 'es'): Promise<void>;
+  };
+  ocr: {
+    status(): Promise<{ available: boolean; binaryPath: string | null }>;
+    extract(imageBase64: string, lang?: string): Promise<OcrResult>;
   };
 }
 

@@ -6,6 +6,7 @@ import type {
   DetectedRoute,
   WorkerHandle,
   TorInstance,
+  OcrResult,
 } from '@freecode/shared-types';
 
 const IpcChannels = {
@@ -20,6 +21,8 @@ const IpcChannels = {
   torfleetEnable: 'torfleet:enable',
   torfleetStatus: 'torfleet:status',
   localeSet: 'locale:set',
+  ocrExtract: 'ocr:extract',
+  ocrStatus: 'ocr:status',
 } as const;
 
 /**
@@ -72,8 +75,14 @@ const api: FreeCodeApi = {
     set: (locale: 'zh' | 'en' | 'es'): Promise<void> =>
       ipcRenderer.invoke(IpcChannels.localeSet, { locale }),
   },
+  ocr: {
+    status: (): Promise<{ available: boolean; binaryPath: string | null }> =>
+      ipcRenderer.invoke(IpcChannels.ocrStatus),
+    extract: (imageBase64: string, lang?: string): Promise<OcrResult> =>
+      ipcRenderer.invoke(IpcChannels.ocrExtract, { imageBase64, lang }),
+  },
 };
 
 contextBridge.exposeInMainWorld('freecode', api);
 
-export type { FreeCodeApi, IpcPayloads, ModelCatalog, DetectedRoute, WorkerHandle, TorInstance };
+export type { FreeCodeApi, IpcPayloads, ModelCatalog, DetectedRoute, WorkerHandle, TorInstance, OcrResult };

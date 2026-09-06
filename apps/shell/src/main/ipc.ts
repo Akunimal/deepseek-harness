@@ -8,6 +8,7 @@ import {
 import { ShellRuntime } from './runtime.js';
 import { detectLocalRoutes } from './omniroute-detector.js';
 import { refreshModels } from './model-refresher.js';
+import { isOcrAvailable, extractText } from './ocr.js';
 import { z } from 'zod';
 import type { TorFleet } from './torfleet.js';
 import { GEMINI_WEB_FALLBACK_MODELS, GEMINI_WEB_PROVIDER } from './gemini-web2api-supervisor.js';
@@ -125,6 +126,22 @@ export function registerIpc(deps: IpcDeps): () => void {
     deps.setLocale(parsed.locale);
   });
 
+  // ocr:status — check if Tesseract is available
+  ipcMain.handle(IpcChannels.ocrStatus, () => ({
+    available: isOcrAvailable(),
+    binaryPath: null, // not exposed to renderer for security
+  }));
+
+  // ocr:extract — extract text from a base64-encoded image
+  ipcMain.handle(IpcChannels.ocrExtract, async (_e, payload: unknown) => {
+    const parsed = z.object({
+      imageBase64: z.string().min(1),
+      lang: z.string().optional(),
+    }).parse(payload);
+    const buffer = Buffer.from(parsed.imageBase64, 'base64');
+    return extractText(buffer, { lang: parsed.lang });
+  });
+
   const emitTorfleetStatus = (): void => {
     const tf = deps.torfleet;
     const payload: IpcPayloads[typeof IpcChannels.torfleetStatus] = {
@@ -150,5 +167,7 @@ export function registerIpc(deps: IpcDeps): () => void {
     ipcMain.removeHandler(IpcChannels.settingsOpenFolder);
     ipcMain.removeHandler(IpcChannels.torfleetEnable);
     ipcMain.removeHandler(IpcChannels.localeSet);
+    ipcMain.removeHandler(IpcChannels.ocrExtract);
+    ipcMain.removeHandler(IpcChannels.ocrStatus);
   };
 }
