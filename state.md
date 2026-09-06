@@ -1,5 +1,40 @@
 # Estado de traspaso — FreeCode DeepSeek Harness
 
+# v0.5.0 — 2026-09-06
+
+## Estado actual de la release
+
+**Versión:** v0.5.0
+**Fecha:** 2026-09-06
+**Rama:** `main`
+
+### Etapas completadas
+
+1. **Review de código** — Auditoría exhaustiva del codebase completo (56 hallazgos). 6 Critical, 26 Warning, 24 Info. Todos los fixes críticos implementados.
+2. **Reforzar contratos** — ChatMessage cross-validation, FreeCodeApi.restartWorker, Zod validation en IPC, WorkerHandle sync docs.
+3. **Upstream sync** — Gap documentado (v0.1.1-rc.2 → v0.1.3-alpha.1, ~15K commits). Deferred a v0.6.0.
+4. **Reasoning policy** — Soporte para modelos thinking de terceros (mimo-v2.5, qwen*think, gemini*thinking) con vocabulario off/low/high.
+5. **Gemini text-only** — Endpoint Gemini Web documentado como solo texto. defaultInput: ['text'].
+6. **OCR con Tesseract** — Módulo ocr.ts, IPC channels ocr:extract/ocr:status, preload bridge.
+7. **MCP servers** — Serena MCP + LSP MCP Server preinstall con script setup-mcp-servers.mjs.
+8. **Documentación** — CHANGELOG, state.md, REVIEW.md, mcp-servers.md actualizados.
+
+### Fixes de seguridad y estabilidad
+
+- `before-quit`: re-entrancy guard + try/catch + limpieza de timers
+- `process.env` whitelist en Gemini y Harness supervisors
+- Mutex en start/stop/restart de ambos supervisors
+- Zod validation para IPC payloads
+- Atomic write en model-refresher
+- Memory leak fixes (TorFleet onChange, lb sticky sessions)
+
+### Pendiente para v0.6.0
+
+- Upstream sync completo con deepseek-ai/deepseek-harness
+- Cherry-pick de bugfixes críticos del upstream
+
+---
+
 # v0.4.0 — 2026-08-29
 
 ## Estado actual de la release

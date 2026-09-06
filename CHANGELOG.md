@@ -1,5 +1,68 @@
 # Changelog
 
+## 0.5.0 — 2026-09-06
+
+### Added / Agregado
+
+- **OCR module** — New `ocr.ts` module wrapping system Tesseract CLI for text
+  extraction from images. Exposes `ocr:extract` and `ocr:status` IPC channels
+  with preload bridge support. Supports Windows/macOS/Linux with configurable
+  language. / Módulo OCR que envuelve el CLI de Tesseract para extracción de
+  texto de imágenes.
+
+- **MCP server preinstall** — Automated setup for Serena MCP (semantic analysis,
+  symbol-level navigation, structural editing) and LSP MCP Server (TypeScript
+  and Python language server integration). Run `pnpm setup:mcp` to install.
+  / Preinstalación automatizada de servidores MCP para análisis semántico y
+  servidores de lenguaje.
+
+- **Thinking model support** — Reasoning policy now recognizes non-DeepSeek
+  thinking-capable models (mimo-v2.5, qwen*think, gemini*thinking) with an
+  off/low/high vocabulary. / La política de razonamiento ahora reconoce modelos
+  con thinking de terceros.
+
+- **Upstream sync status** — Documented the gap with upstream deepseek-harness
+  (v0.1.1-rc.2 → v0.1.3-alpha.1). Full sync deferred to v0.6.0.
+  / Documentado el gap con upstream.
+
+### Fixed / Corregido
+
+- **Critical security fixes from code review (56 findings)**:
+  - `before-quit`: re-entrancy guard + try/catch wrapper + all timers cleared
+  - `process.env` whitelist: prevent leaking Electron/Node internals to child
+    processes in both Gemini and Harness supervisors
+  - IPC: Zod validation for `pool:restartWorker` and `torfleet:enable`
+  - `model-refresher`: atomic write (tmp+rename) for settings.yaml
+  - `pool.ts`: snapshot workerMap before async healthTick iteration
+  - `pool.ts`: catch unhandled rejections on healthTick
+  - `lb.ts`: periodic sweep of stale sticky sessions
+
+- **Race condition fixes**:
+  - `HarnessSupervisor`: mutex on start/stop/restart prevents orphan processes
+  - `GeminiWeb2ApiSupervisor`: mutex on start/stop prevents race conditions
+  - `TorFleet onChange`: remove duplicate listener on toggle (memory leak fix)
+
+### Changed / Cambiado
+
+- **Gemini Web endpoint** is now explicitly documented as text-only queries.
+  The `defaultInput` field changed from `['text', 'image']` to `['text']`.
+  Image/vision inputs are unsupported by the web bridge.
+  / El endpoint Gemini Web ahora es explícitamente solo texto.
+
+- **Contract strengthening**:
+  - `ChatMessage` schema: cross-validate `toolCalls` (assistant role only) and
+    `toolResults` (tool role only) via Zod refinement
+  - `FreeCodeApi`: added missing `pool.restartWorker` method to preload bridge
+  - WorkerHandle documentation: documented sync requirement between
+    opencode-adapter/types and shared-types
+
+### Deferred / Diferido
+
+- **Upstream sync**: Full sync with deepseek-ai/deepseek-harness deferred to
+  v0.6.0. Current: v0.1.1-rc.2, Upstream: v0.1.3-alpha.1 (~15K commits).
+  Key missing features: hooks stack, filesystem tools, web seam, compaction
+  refactor, todo tool, session fork, Agent.cancel().
+
 ## 0.4.0 — 2026-08-29
 
 ### Added / Agregado
