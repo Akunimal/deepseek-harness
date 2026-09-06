@@ -144,7 +144,7 @@ export function seedProviders(cfg: SeederConfig): { seeded: boolean; path: strin
       api: 'openai-completions',
       baseURL: geminiBaseUrl,
       headers: { Authorization: LOCAL_PROVIDER_AUTH_HEADER },
-      defaultInput: ['text', 'image'],
+      defaultInput: ['text'], // Gemini Web bridge is text-only — image inputs are unsupported
       models: cloneGeminiFallbackModels(),
     };
     seeded = true;
