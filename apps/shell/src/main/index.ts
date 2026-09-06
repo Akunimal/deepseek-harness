@@ -190,6 +190,7 @@ let updateCheckInFlight: Promise<UpdateCheckResult | null> | null = null;
 let updateIndicatorPlacement = 0;
 const UPDATE_INDICATOR_SIZE = 36;
 let torfleetEnabled = false;
+let torfleetOnChangeCleanup: (() => void) | null = null;
 /** Assigned once enableTorfleet exists; the LB's rate-limit callback delegates
  *  here to auto-enable Tor Fleet with a user warning. */
 let autoEnableTorHandler: (() => void) | null = null;
@@ -198,6 +199,8 @@ let autoEnableTorHandler: (() => void) | null = null;
 const TOR_AUTOPROMPT_COOLDOWN_MS = 10 * 60 * 1_000;
 let torAutoPromptSuppressedUntil = 0;
 let shuttingDown = false;
+let refreshIntervalId: NodeJS.Timeout | null = null;
+let refreshRetryTimer: NodeJS.Timeout | null = null;
 const backendStates: Record<'catalog' | 'pool', BackendState> = { catalog: 'unknown', pool: 'unknown' };
 
 function reportBackendState(kind: 'catalog' | 'pool', state: Exclude<BackendState, 'unknown'>, detail?: string): void {
@@ -908,7 +911,6 @@ app.whenReady().then(async () => {
   let catalog: ModelCatalog | null = null;
   let refreshInFlight = false;
   let refreshRetryAttempt = 0;
-  let refreshRetryTimer: NodeJS.Timeout | null = null;
   const scheduleRefreshRetry = (): void => {
     if (refreshRetryTimer) return;
     const delay = REFRESH_RETRY_DELAYS_MS[Math.min(refreshRetryAttempt, REFRESH_RETRY_DELAYS_MS.length - 1)]!;
@@ -950,7 +952,7 @@ app.whenReady().then(async () => {
     }
   };
   void doRefresh();
-  setInterval(() => void doRefresh(), REFRESH_INTERVAL_MS);
+  const refreshIntervalId = setInterval(() => void doRefresh(), REFRESH_INTERVAL_MS);
 
   // TorFleet — headless Tor SOCKS5 rotation for pool 429 mitigation.
   const tfState = loadTorFleetState(userDataDir);
@@ -976,7 +978,9 @@ app.whenReady().then(async () => {
           socks5_paid_direct: false,
         });
       }
-      torfleet.onChange(async (instances) => {
+      // Remove previous listener to prevent accumulation on toggle on→off→on
+      torfleetOnChangeCleanup?.();
+      torfleetOnChangeCleanup = torfleet.onChange(async (instances) => {
         const ready = instances.filter((i) => i.status === 'ready');
         if (runtime && ready.length > 0) {
           const fresh = torfleet!.socksProxies();
@@ -1111,22 +1115,28 @@ app.on('window-all-closed', () => {
 });
 
 app.on('before-quit', async (e) => {
+  if (shuttingDown) return; // re-entrancy guard: Electron may fire before-quit multiple times
   shuttingDown = true;
-  if (!runtime) {
-    if (torfleet) await torfleet.stop();
-    await geminiWeb2Api?.stop();
-    await appLogger?.close();
-    return;
-  }
   e.preventDefault();
-  if (updateTimer) clearInterval(updateTimer);
-  if (torfleet) await torfleet.stop();
-  await geminiWeb2Api?.stop();
-  await embeddedBrowser?.close();
-  embeddedBrowser = null;
-  await dialogBridge?.close();
-  dialogBridge = null;
-  await runtime.stop();
-  await appLogger?.close();
+  try {
+    // Clear all timers to prevent post-shutdown callbacks
+    if (updateTimer) { clearInterval(updateTimer); updateTimer = null; }
+    if (refreshRetryTimer) { clearTimeout(refreshRetryTimer); refreshRetryTimer = null; }
+    if (refreshIntervalId) { clearInterval(refreshIntervalId); refreshIntervalId = null; }
+    // Stop TorFleet once (guarded against double-stop)
+    if (torfleet) {
+      try { await torfleet.stop(); } catch { /* best effort */ }
+      torfleet = null;
+    }
+    await geminiWeb2Api?.stop();
+    await embeddedBrowser?.close();
+    embeddedBrowser = null;
+    await dialogBridge?.close();
+    dialogBridge = null;
+    await runtime?.stop();
+    await appLogger?.close();
+  } catch (err) {
+    console.error('[main] before-quit cleanup error:', err);
+  }
   app.exit(0);
 });

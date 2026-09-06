@@ -52,6 +52,7 @@ export class GeminiWeb2ApiSupervisor {
   private managed = false;
   private stopping = false;
   private reason: string | undefined;
+  private lifecycleLock: Promise<void> = Promise.resolve();
 
   constructor(config: GeminiWeb2ApiSupervisorConfig) {
     this.cfg = { ...config };
@@ -75,86 +76,109 @@ export class GeminiWeb2ApiSupervisor {
 
   async start(): Promise<GeminiWeb2ApiStartResult> {
     if (this.status === 'ready') return this.result();
+    let result!: GeminiWeb2ApiStartResult;
+    await this.withLock(async () => {
+      if (this.status === 'ready') { result = this.result(); return; }
+      this.stopping = false;
+      this.reason = undefined;
 
-    this.stopping = false;
-    this.reason = undefined;
+      // Reuse a service the user already launched.
+      if (await this.isHealthy()) {
+        this.status = 'ready';
+        this.managed = false;
+        result = this.result();
+        return;
+      }
 
-    // Reuse a service the user already launched. This also makes development
-    // convenient: the app does not compete with a separately managed server.
-    if (await this.isHealthy()) {
-      this.status = 'ready';
-      this.managed = false;
-      return this.result();
-    }
+      const sourceDir = resolveGeminiWeb2ApiDir(this.cfg.resourcesDir);
+      if (!existsSync(resolve(sourceDir, 'gemini_web2api', '__main__.py'))) {
+        result = this.unavailable('gemini-web2api source is not present in the packaged resources');
+        return;
+      }
 
-    const sourceDir = resolveGeminiWeb2ApiDir(this.cfg.resourcesDir);
-    if (!existsSync(resolve(sourceDir, 'gemini_web2api', '__main__.py'))) {
-      return this.unavailable('gemini-web2api source is not present in the packaged resources');
-    }
+      const python = resolvePythonCommand(this.cfg.pythonPath);
+      if (!python) {
+        result = this.unavailable('Python 3 was not found; install Python or run gemini-web2api separately');
+        return;
+      }
 
-    const python = resolvePythonCommand(this.cfg.pythonPath);
-    if (!python) {
-      return this.unavailable('Python 3 was not found; install Python or run gemini-web2api separately');
-    }
+      const dataDir = join(this.cfg.userDataDir, 'gemini-web2api');
+      let configPath: string;
+      try {
+        configPath = ensureConfig(dataDir, this.port());
+      } catch (error) {
+        result = this.unavailable('gemini-web2api config.json is invalid; fix or remove it', error);
+        return;
+      }
+      this.status = 'starting';
+      this.managed = true;
 
-    const dataDir = join(this.cfg.userDataDir, 'gemini-web2api');
-    let configPath: string;
-    try {
-      configPath = ensureConfig(dataDir, this.port());
-    } catch (error) {
-      return this.unavailable('gemini-web2api config.json is invalid; fix or remove it', error);
-    }
-    this.status = 'starting';
-    this.managed = true;
-
-    const env: NodeJS.ProcessEnv = {
-      ...process.env,
-      PYTHONUNBUFFERED: '1',
-    };
-    const args = [
-      ...python.args,
-      '-m',
-      'gemini_web2api',
-      '--config',
-      configPath,
-    ];
-    let proc: ChildProcess;
-    try {
-      proc = spawn(python.executable, args, {
-        cwd: sourceDir,
-        env,
-        windowsHide: true,
-        stdio: ['ignore', 'pipe', 'pipe'],
+      // Whitelist only safe env vars — don't leak Electron/Node internals to Python child.
+      const SAFE_PYTHON_ENV = [
+        'PATH', 'HOME', 'USER', 'USERPROFILE', 'HOMEDRIVE', 'HOMEPATH', 'TEMP', 'TMP', 'TMPDIR',
+        'SYSTEMROOT', 'WINDIR', 'COMSPEC', 'PROGRAMFILES', 'LOCALAPPDATA', 'APPDATA',
+      ] as const;
+      const safeEnv: NodeJS.ProcessEnv = {};
+      for (const key of SAFE_PYTHON_ENV) {
+        const val = process.env[key];
+        if (val !== undefined) safeEnv[key] = val;
+      }
+      const env: NodeJS.ProcessEnv = {
+        ...safeEnv,
+        PYTHONUNBUFFERED: '1',
+      };
+      const args = [
+        ...python.args,
+        '-m',
+        'gemini_web2api',
+        '--config',
+        configPath,
+      ];
+      let proc: ChildProcess;
+      try {
+        proc = spawn(python.executable, args, {
+          cwd: sourceDir,
+          env,
+          windowsHide: true,
+          stdio: ['ignore', 'pipe', 'pipe'],
+        });
+      } catch (error) {
+        result = this.unavailable('could not start Python for gemini-web2api', error);
+        return;
+      }
+      this.proc = proc;
+      this.attachOutput(proc);
+      proc.once('error', (error) => {
+        this.cfg.log?.('warn', 'gemini-web2api process error', { error: String(error) });
       });
-    } catch (error) {
-      return this.unavailable('could not start Python for gemini-web2api', error);
-    }
-    this.proc = proc;
-    this.attachOutput(proc);
-    proc.once('error', (error) => {
-      this.cfg.log?.('warn', 'gemini-web2api process error', { error: String(error) });
-    });
-    proc.once('exit', (code, signal) => {
-      if (this.stopping) return;
-      this.cfg.log?.('warn', 'gemini-web2api exited', { code, signal });
-      this.proc = null;
-      this.managed = false;
-      this.status = 'unavailable';
-      this.reason = `gemini-web2api exited before or during use (code=${String(code)}, signal=${String(signal)})`;
-    });
+      proc.once('exit', (code, signal) => {
+        if (this.stopping) return;
+        this.cfg.log?.('warn', 'gemini-web2api exited', { code, signal });
+        this.proc = null;
+        this.managed = false;
+        this.status = 'unavailable';
+        this.reason = `gemini-web2api exited before or during use (code=${String(code)}, signal=${String(signal)})`;
+      });
 
-    const ready = await this.waitForHealth(this.cfg.startupTimeoutMs ?? DEFAULT_STARTUP_TIMEOUT_MS);
-    if (!ready) {
-      const reason = 'gemini-web2api did not become ready before the startup timeout';
-      this.cfg.log?.('warn', reason);
-      await this.stop();
-      return this.unavailable(reason);
-    }
-    this.status = 'ready';
-    return this.result();
+      const ready = await this.waitForHealth(this.cfg.startupTimeoutMs ?? DEFAULT_STARTUP_TIMEOUT_MS);
+      if (!ready) {
+        const reason = 'gemini-web2api did not become ready before the startup timeout';
+        this.cfg.log?.('warn', reason);
+        await this.stopInternal();
+        result = this.unavailable(reason);
+        return;
+      }
+      this.status = 'ready';
+      result = this.result();
+    });
+    return result;
   }
 
   async stop(): Promise<void> {
+    await this.withLock(async () => { await this.stopInternal(); });
+  }
+
+  private async stopInternal(): Promise<void> {
     this.stopping = true;
     const proc = this.proc;
     this.proc = null;
@@ -163,6 +187,18 @@ export class GeminiWeb2ApiSupervisor {
     if (proc && proc.exitCode === null) {
       killTree(proc.pid ?? -1);
       await sleep(250);
+    }
+  }
+
+  private async withLock<T>(fn: () => Promise<T>): Promise<T> {
+    const prev = this.lifecycleLock;
+    let release: () => void;
+    this.lifecycleLock = new Promise<void>((r) => { release = r; });
+    await prev;
+    try {
+      return await fn();
+    } finally {
+      release!();
     }
   }
 

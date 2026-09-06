@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, existsSync, renameSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { load as loadYaml, dump as dumpYaml } from 'js-yaml';
 import { reasoningEffortsForModel } from './reasoning-policy.js';
@@ -266,5 +266,9 @@ function readSettings(path: string): Record<string, any> {
 
 function writeSettings(path: string, settings: Record<string, any>): void {
   mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, dumpYaml(settings, { noRefs: true, lineWidth: 120 }), 'utf8');
+  const yaml = dumpYaml(settings, { noRefs: true, lineWidth: 120 });
+  // Atomic write: tmp + rename to prevent corruption on crash.
+  const tmp = `${path}.tmp`;
+  writeFileSync(tmp, yaml, 'utf8');
+  renameSync(tmp, path);
 }

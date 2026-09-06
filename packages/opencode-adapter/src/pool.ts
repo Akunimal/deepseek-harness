@@ -133,7 +133,9 @@ export class OpenCodePool implements Pool {
     }
     await Promise.allSettled(spawns);
 
-    this.healthTimer = setInterval(() => void this.healthTick(), HEALTH_INTERVAL_MS);
+    this.healthTimer = setInterval(() => {
+      void this.healthTick().catch((err) => console.error('[pool] healthTick error:', err));
+    }, HEALTH_INTERVAL_MS);
     this.healthTimer.unref();
   }
 
@@ -381,7 +383,9 @@ export class OpenCodePool implements Pool {
 
   private async healthTick(): Promise<void> {
     if (!this.started) return;
-    for (const w of this.workerMap.values()) {
+    // Snapshot the worker map to avoid race conditions with resize/spawn during async iteration.
+    const snapshot = [...this.workerMap.values()];
+    for (const w of snapshot) {
       if (w.status !== 'ready' && w.status !== 'unhealthy') continue;
       const ok = await healthOk(w.port, 2_000, this.cfg.baseAuthHeader);
       if (ok) {

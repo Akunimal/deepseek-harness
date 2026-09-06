@@ -14,6 +14,8 @@ import { GEMINI_WEB_FALLBACK_MODELS, GEMINI_WEB_PROVIDER } from './gemini-web2ap
 
 const PoolResizePayloadSchema = z.object({ size: z.number().int().min(1).max(16) });
 const LocaleSetPayloadSchema = z.object({ locale: z.enum(['zh', 'en', 'es']) });
+const PoolRestartWorkerPayloadSchema = z.object({ id: z.string().min(1).max(128) });
+const TorfleetEnablePayloadSchema = z.object({ enabled: z.boolean() });
 
 /**
  * IPC contract — zod-validated channel handlers exposed to the renderer
@@ -95,8 +97,10 @@ export function registerIpc(deps: IpcDeps): () => void {
   // pool:restartWorker (invoke)
   ipcMain.handle(
     IpcChannels.poolRestartWorker,
-    (_e, payload: IpcPayloads[typeof IpcChannels.poolRestartWorker]) =>
-      runtime.pool.restartWorker(payload.id),
+    (_e, payload: unknown) => {
+      const parsed = PoolRestartWorkerPayloadSchema.parse(payload);
+      return runtime.pool.restartWorker(parsed.id);
+    },
   );
 
   // pool:resize — live account/worker-slot slider, bounded to the adapter contract.
@@ -109,8 +113,9 @@ export function registerIpc(deps: IpcDeps): () => void {
   ipcMain.handle(IpcChannels.settingsOpenFolder, () => shell.openPath(homeDir));
 
   // torfleet:enable (invoke)
-  ipcMain.handle(IpcChannels.torfleetEnable, async (_e, payload: { enabled: boolean }) => {
-    await deps.torfleet.enable(payload.enabled);
+  ipcMain.handle(IpcChannels.torfleetEnable, async (_e, payload: unknown) => {
+    const parsed = TorfleetEnablePayloadSchema.parse(payload);
+    await deps.torfleet.enable(parsed.enabled);
     emitTorfleetStatus();
   });
 

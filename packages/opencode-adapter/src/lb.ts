@@ -137,6 +137,13 @@ export function createLoadBalancer(opts: LoadBalancerOptions): LoadBalancer {
   function commitSticky(sidStr: string | undefined, workerId: string): void {
     if (!sidStr) return;
     sticky.set(sidStr, { workerId, lastSeen: Date.now() });
+    // Periodic sweep to prevent unbounded growth
+    if (sticky.size > 100) {
+      const now = Date.now();
+      for (const [key, entry] of sticky) {
+        if (now - entry.lastSeen > STICKY_TTL_MS) sticky.delete(key);
+      }
+    }
   }
 
   function sendJson(res: ServerResponse, status: number, obj: unknown): void {

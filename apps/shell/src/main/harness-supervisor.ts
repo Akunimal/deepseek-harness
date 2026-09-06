@@ -97,6 +97,7 @@ export class HarnessSupervisor {
   private readyListeners = new Set<(h: HarnessInstance) => void>();
   private stuckListeners = new Set<(h: HarnessInstance) => void>();
   private outBuffer = '';
+  private lifecycleLock: Promise<void> = Promise.resolve();
 
   constructor(config: HarnessSupervisorConfig) {
     this.cfg = { ...config, backoffBaseMs: config.backoffBaseMs ?? 1_000 };
@@ -111,38 +112,59 @@ export class HarnessSupervisor {
   }
 
   async start(): Promise<void> {
-    if (this.proc && this.proc.exitCode === null) return;
-    this.stopping = false;
-    if (this.status === 'starting') return;
-    await this.spawn();
+    if (this.status === 'starting' || (this.proc && this.proc.exitCode === null)) return;
+    await this.withLock(async () => {
+      if (this.status === 'starting' || (this.proc && this.proc.exitCode === null)) return;
+      this.stopping = false;
+      await this.spawn();
+    });
   }
 
   async stop(): Promise<void> {
-    this.stopping = true;
-    if (this.restartTimer) {
-      clearTimeout(this.restartTimer);
-      this.restartTimer = null;
-    }
-    const proc = this.proc;
-    this.proc = null;
-    this.status = 'stopped';
-    this.url = null;
-    if (proc && proc.exitCode === null) {
-      killTree(proc.pid ?? -1);
-      // Give the tree a moment to die; tests assert no orphan pids.
-      await sleep(1_500);
-    }
+    await this.withLock(async () => {
+      this.stopping = true;
+      if (this.restartTimer) {
+        clearTimeout(this.restartTimer);
+        this.restartTimer = null;
+      }
+      const proc = this.proc;
+      this.proc = null;
+      this.status = 'stopped';
+      this.url = null;
+      if (proc && proc.exitCode === null) {
+        killTree(proc.pid ?? -1);
+        await sleep(1_500);
+      }
+    });
   }
 
   async restart(): Promise<void> {
-    this.stopping = false;
-    if (this.proc && this.proc.exitCode === null) {
-      const old = this.proc;
-      this.proc = null;
-      killTree(old.pid ?? -1);
-      await sleep(300);
+    await this.withLock(async () => {
+      this.stopping = false;
+      if (this.restartTimer) {
+        clearTimeout(this.restartTimer);
+        this.restartTimer = null;
+      }
+      if (this.proc && this.proc.exitCode === null) {
+        const old = this.proc;
+        this.proc = null;
+        killTree(old.pid ?? -1);
+        await sleep(300);
+      }
+      await this.spawn();
+    });
+  }
+
+  private async withLock<T>(fn: () => Promise<T>): Promise<T> {
+    const prev = this.lifecycleLock;
+    let release: () => void;
+    this.lifecycleLock = new Promise<void>((r) => { release = r; });
+    await prev;
+    try {
+      return await fn();
+    } finally {
+      release!();
     }
-    await this.spawn();
   }
 
   onReady(cb: (h: HarnessInstance) => void): () => void {
@@ -167,8 +189,24 @@ export class HarnessSupervisor {
     this.startedAt = Date.now();
 
     const dshArgs = [...DSH_WEB_ARGS];
+    // Whitelist only safe env vars instead of leaking all of process.env to the child.
+    // This prevents Electron/Node internals, API keys, and debug flags from being exposed.
+    const SAFE_ENV_KEYS = [
+      'PATH', 'HOME', 'USER', 'USERPROFILE', 'HOMEDRIVE', 'HOMEPATH', 'TEMP', 'TMP', 'TMPDIR',
+      'SYSTEMROOT', 'WINDIR', 'COMSPEC', 'PROGRAMFILES', 'PROGRAMFILES(X86)', 'LOCALAPPDATA',
+      'APPDATA', 'COMMONPROGRAMFILES', 'COMMONPROGRAMFILES(X86)', 'ProgramData',
+      'node_options', 'NODE_OPTIONS', 'ELECTRON_RUN_AS_NODE',
+      'DSH_HOME', 'OPENCODE2API_LB_URL',
+      'FREECODE_EMBEDDED_BROWSER_ENDPOINT', 'FREECODE_EMBEDDED_BROWSER_TOKEN',
+      'FREECODE_PUBLIC_KEY', 'DEEPSEEK_API_KEY',
+    ] as const;
+    const safeEnv: Record<string, string> = {};
+    for (const key of SAFE_ENV_KEYS) {
+      const val = process.env[key];
+      if (val !== undefined) safeEnv[key] = val;
+    }
     const env: Record<string, string> = {
-      ...process.env as Record<string, string>,
+      ...safeEnv,
       ...this.cfg.nodeEnv,
       DSH_HOME: this.cfg.homeDir,
       ...(this.cfg.lbUrl ? { OPENCODE2API_LB_URL: this.cfg.lbUrl } : {}),
