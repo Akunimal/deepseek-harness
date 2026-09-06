@@ -286,3 +286,32 @@
 | 11 | harness-supervisor.ts | mkdirSync unhandled | try/catch + .catch() |
 | 12 | updater.ts | checkInFlight TTL | Add timeout to dedup |
 | 13 | harness-supervisor.ts | tryGrabs listener isolation | try/catch per listener |
+
+---
+
+## Upstream Sync Status (v0.5.0)
+
+| Item | Value |
+|---|---|
+| Vendored version | `0.1.1-rc.2` |
+| Upstream latest | `0.1.3-alpha.1` (dsh-v0.1.3-alpha.1) |
+| Commits behind | ~15,210 |
+| Files changed | ~13,402 |
+| **Decision** | **Deferred to v0.6.0** — full sync is a major integration project |
+
+Key upstream features NOT yet synced (planned for v0.6.0):
+- Hooks stack (Claude Code/Codex bridges, interception, protocol)
+- Filesystem tools (dsh-tool-fs, applied-hunk diffs)
+- Web capability seam (exa/perplexity search providers)
+- Compaction refactor (explicit config knobs, convergence)
+- Todo tool (todo_write)
+- Session fork + pre-step cancellation
+- Agent.cancel() primitive + AgentHandle
+- Tool presentation overhaul (render-intent union)
+- pnpm migration
+
+Critical bugfixes NOT yet synced (evaluate for cherry-pick in v0.5.x patch):
+- Registration atomicity fix
+- Tool/result callId fix
+- Turn-step balance fix
+- Step-start order fix
