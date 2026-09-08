@@ -85,6 +85,21 @@ describe('update service', () => {
     expect(adapter.quitAndInstall).toHaveBeenCalledTimes(1);
   });
 
+  it('refuses to install when the updater cannot download the confirmed release', async () => {
+    const adapter = {
+      autoDownload: false,
+      autoInstallOnAppQuit: false,
+      checkForUpdates: vi.fn(async () => ({ updateInfo: { version: '0.5.0' } })),
+      quitAndInstall: vi.fn(),
+    } as UpdaterAdapter;
+    const service = createUpdateService({ enabled: true, adapter });
+    await expect(service.downloadAndInstall()).resolves.toMatchObject({
+      status: 'failed',
+      error: expect.stringContaining('downloadUpdate'),
+    });
+    expect(adapter.quitAndInstall).not.toHaveBeenCalled();
+  });
+
   it('detects a newer upstream commit without downloading a release', async () => {
     const fetchImpl = vi.fn(async () => new Response(JSON.stringify({ sha: 'new-upstream-sha' }), { status: 200 }));
     await expect(checkUpstreamUpdate('old-upstream-sha', fetchImpl)).resolves.toMatchObject({

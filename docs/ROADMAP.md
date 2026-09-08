@@ -1,7 +1,7 @@
 # Roadmap / Hoja de ruta
 
-Última revisión / Last reviewed: 2026-08-29
-Baseline: `v0.4.0`
+Última revisión / Last reviewed: 2026-09-07
+Baseline: `v0.5.0`
 Estado / Status: objetivos sujetos a validación; no son fechas ni promesas de release.
 
 FreeCode mantiene los workflows de publicación manuales para no consumir cuota gratuita de GitHub. Cada versión se publica sólo después de pasar sus contratos, pruebas relevantes y una revisión del instalador.
@@ -13,7 +13,7 @@ FreeCode keeps release workflows manual so they do not consume GitHub free quota
 | Capa / Layer | Estado / Status | Responsabilidad / Responsibility |
 | --- | --- | --- |
 | RTK (`rtk-ai/rtk`) | Disponible hoy, opcional / Available today, optional | Reduce la salida de comandos CLI elegibles antes de que entre al contexto del modelo. Si no existe el ejecutable, FreeCode vuelve al comando original. / Reduces eligible CLI output before it enters model context. If the executable is absent, FreeCode falls back to the original command. |
-| Caveman (`JuliusBrussee/caveman`) | Integrado, deshabilitado por defecto / Integrated, disabled by default | Compresión de contexto de comandos para ahorro de tokens. Requiere Caveman instalado por separado. / Command output context compression for token savings. Requires Caveman installed separately. |
+| Caveman (`JuliusBrussee/caveman`) | Integrado opcional, desactivado / Integrated optional, disabled | La tarjeta Shell expone un toggle independiente. Sólo envuelve comandos simples cuando el ejecutable ya está instalado; si falta, no cambia nada. / The Shell card exposes an independent toggle. It wraps simple commands only when the executable is already installed; if missing, it changes nothing. |
 
 RTK y Caveman no están habilitados juntos por defecto: pueden ser complementarios, pero una doble compresión puede quitar información útil o dificultar la depuración.
 
@@ -21,11 +21,11 @@ RTK and Caveman are not enabled together by default: they may complement each ot
 
 ## Completado / Completed
 
-### `v0.4.0` — Caveman + Updater Fix
+### `v0.4.0` — Updater Fix + Caveman evaluation
 
 **Estado / Status:** completado / completed.
 
-1. **Caveman integration** — Toggle opcional en Shell settings junto a RTK. Default OFF.
+1. **Caveman integration** — Se integró como feature modular opt-in en la tarjeta Shell; queda desactivado por defecto y el ejecutable sigue siendo externo.
 2. **Updater fix** — Botón alineado con "Enviar", notificaciones en tray, instalación explícita.
 3. **Spanish locale** — Verificado y documentado como funcional.
 4. **Documentation** — CHANGELOG y ROADMAP actualizados.
@@ -42,18 +42,18 @@ RTK and Caveman are not enabled together by default: they may complement each ot
 
 ### `v0.3.3` — Update UX follow-up / Seguimiento de experiencia de actualización
 
-Estado / Status: planificado; no implementado en `v0.3.2`.
+Estado / Status: propuesta histórica, superseded by the implementation recorded
+in `v0.4.0` and hardened again in `v0.5.0`; it is not an outstanding release
+task.
 
 Esta versión debe cerrar dos pendientes visibles del flujo de actualización:
 
 1. **Botón de actualizar alineado con Enviar / Update button matching Send**
-   - Reemplazar el indicador circular independiente de
-     `apps/shell/src/main/index.ts` (`renderUpdateIndicatorHtml`) por un botón
-     con la misma geometría, fondo, borde, estados hover/active y jerarquía
-     visual que el botón de enviar mensaje del Harness.
-   - Mantener la flecha hacia abajo como único icono y conservar el texto
-     accesible `Actualización disponible` / `Update available` para tooltip y
-     lectores de pantalla.
+   - Historical proposal: the v0.5.0 implementation now uses the same 34px
+     circular primary geometry, colors, hover state, and SVG path as the Send
+     button, with the path rotated downward.
+   - The accessible `Actualización disponible` / `Update available` label is
+     retained as tooltip and screen-reader text.
    - El botón debe seguir apareciendo junto a Configuración, respetar el
      layout del sidebar y conservar el comportamiento actual de abrir el flujo
      de actualización al hacer clic.
@@ -63,9 +63,10 @@ Esta versión debe cerrar dos pendientes visibles del flujo de actualización:
      contrato visual probado.
 
 2. **Aviso visible durante la instalación / Visible installation notice**
-   - Antes de comenzar la descarga o instalación, emitir desde el proceso
-     principal una notificación nativa asociada a la tray con un mensaje claro:
-     `FreeCode se está actualizando` / `FreeCode is updating`.
+   - v0.5.0 now emits a native notification before downloading and keeps the
+     tray tooltip/menu at `Descargando actualización…` / `Downloading update…`
+     until the download promise settles; it changes to installing before the
+     application restart.
    - Cubrir tanto la actualización completa de la aplicación
      (`downloadAndInstall`) como la actualización exclusiva del runtime del
      Harness (`installHarness`), para que ninguna ruta quede silenciosa cuando
@@ -101,8 +102,8 @@ Esta versión debe cerrar dos pendientes visibles del flujo de actualización:
 
 **Criterios de aceptación / Acceptance criteria:**
 
-- El botón de actualización se percibe como parte del mismo sistema visual que
-  Enviar y muestra una flecha descendente, sin el círculo usado en `v0.3.2`.
+- El botón de actualización se percibe como el mismo botón circular primario
+  que Enviar y muestra una flecha descendente.
 - Al iniciar cualquiera de las dos rutas de instalación aparece el aviso de
   actualización aun cuando la ventana principal esté en la tray.
 - Una actualización completa iniciada desde la app termina con la nueva
@@ -117,8 +118,8 @@ Esta versión debe cerrar dos pendientes visibles del flujo de actualización:
 
 **Acceptance criteria (English):**
 
-- The update control uses the same visual system as Send and shows a downward
-  arrow, without the circular control shipped in `v0.3.2`.
+- The update control is the same circular primary button as Send and shows a
+  downward arrow.
 - Starting either installation route shows the updating notice even when the
   main window is hidden in the tray.
 - A full update started from the app finishes with the new version installed

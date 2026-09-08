@@ -10,6 +10,7 @@ import { HarnessSupervisor, HarnessInstance } from './harness-supervisor.js';
 import { SecretStore, resolveSecrets } from './secret-store.js';
 import { join, resolve } from 'node:path';
 import { resolveOpencodeBinary } from './resource-paths.js';
+import { ensureEmbeddedMcpConfig } from './mcp-home.js';
 
 /**
  * Shell runtime — owns the full backend stack of the desktop app:
@@ -56,6 +57,16 @@ export interface ShellRuntime {
 }
 
 export async function createShellRuntime(cfg: ShellRuntimeConfig): Promise<ShellRuntime> {
+  try {
+    const mcp = ensureEmbeddedMcpConfig(join(cfg.userDataDir, 'dsh-home'));
+    cfg.log?.('info', 'embedded MCP catalog ready', { enabled: mcp.enabled, configPath: mcp.configPath });
+  } catch (error) {
+    // MCP is optional; a config filesystem failure must not prevent the core
+    // desktop runtime from starting. The warning remains in the app log.
+    cfg.log?.('warn', 'embedded MCP catalog unavailable', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
   const binaryPath = resolveOpencodeBinary(cfg.resourcesDir, process.platform, process.arch);
 
   const pool = new OpenCodePool({

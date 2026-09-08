@@ -50,16 +50,18 @@ describe('documentation feature inventory', () => {
     expect(spanishReadme).toContain('docs/KNOWN-ISSUES.md');
   });
 
-  it('keeps Caveman explicitly planned and the known-issues baseline honest', () => {
+  it('keeps Caveman optional and the known-issues baseline honest', () => {
     const roadmap = readFileSync(join(ROOT, 'docs/ROADMAP.md'), 'utf8');
     const knownIssues = readFileSync(join(ROOT, 'docs/KNOWN-ISSUES.md'), 'utf8');
 
     expect(roadmap).toContain('https://github.com/JuliusBrussee/caveman');
-    expect(roadmap).toContain('not integrated');
+    expect(roadmap).toContain('Integrado opcional, desactivado');
+    expect(roadmap).toContain('Integrated optional, disabled');
     expect(roadmap).toContain('fail-closed');
     expect(roadmap).toContain('RTK+Caveman');
     expect(knownIssues).toContain('No hay un bug funcional bloqueante confirmado');
-    expect(knownIssues).toContain('Caveman is not implemented yet');
+    expect(knownIssues).toContain('RTK and Caveman remain external optional tools');
+    expect(knownIssues).toContain('FreeCode no incluye, descarga ni instala RTK ni Caveman');
     expect(knownIssues).not.toContain('Español está pendiente de una corrección');
   });
 });

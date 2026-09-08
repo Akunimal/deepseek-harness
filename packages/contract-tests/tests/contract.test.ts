@@ -84,11 +84,12 @@ describe('contract: settings.yaml schema', () => {
 
 // ---------------------------------------------------------------------------
 // 4+9. Custom provider + /api transport handshake (live boot, no LB needed)
-//       → if the RPC envelope or llm.providers shape changes, adapt
+//       → if the RPC envelope or llm/listConfigurableProviders shape changes,
+//         adapt workspace-bridge rpc-client + seeder
 //       workspace-bridge rpc-client + seeder
 // ---------------------------------------------------------------------------
 describe.skipIf(!HARNESS_BUILT)('contract: host RPC + provider registration', () => {
-  it('POST /api/llm.providers answers the client-request envelope', async () => {
+  it('POST /api/llm/listConfigurableProviders answers the client-request envelope', async () => {
     const home = mkdtempSync(join(tmpdir(), 'dsh-contract-provider-'));
     // Seed $DSH_HOME/settings.yaml the way provider-seeder does: the
     // llm-pi-ai namespace, hand-declared route, NON-EMPTY models list
@@ -113,39 +114,43 @@ describe.skipIf(!HARNESS_BUILT)('contract: host RPC + provider registration', ()
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     try {
-      const line = await waitForLine(proc, /http:\/\/127\.0\.0\.1:\d+/, TIMEOUT_MS);
-      const base = line.match(/http:\/\/127\.0\.0\.1:\d+/)?.[0];
-      expect(base).toBeDefined();
+      const line = await waitForLine(proc, /dsh web: http:\/\/127\.0\.0\.1:\d+\/\?[^\s]+/, TIMEOUT_MS);
+      const { base, cookie } = await authenticatePrintedUrl(line);
 
-      const res = await fetch(`${base}/api/llm.providers`, {
+      const res = await fetch(`${base}/api/llm/listConfigurableProviders`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: { 'content-type': 'application/json', cookie },
         body: JSON.stringify({
           type: 'client-request',
           rpcId: 'contract-test-1',
-          method: 'llm.providers',
-          payload: {},
+          method: 'llm/listConfigurableProviders',
+          payload: { args: {} },
         }),
       });
       expect(res.status).toBe(200);
       const body = (await res.json()) as {
         type: string;
         rpcId: string;
-        result: { ok: boolean; value?: { providers?: unknown[] } };
+        result: { ok: boolean; value?: unknown };
       };
       expect(body.type).toBe('server-response');
       expect(body.rpcId).toBe('contract-test-1');
-      expect(body.result.ok).toBe(true);
-      const providers = body.result.value?.providers ?? [];
+      expect(body.result.ok, JSON.stringify(body)).toBe(true);
+      const providers = Array.isArray(body.result.value) ? body.result.value : [];
       // Our seeded route must be visible (declared) in the configurable dir.
       const found = providers.find(
         (p) => (p as { provider?: string }).provider === 'deepseek-free',
       ) as { provider?: string; active?: boolean; declared?: boolean } | undefined;
       expect(found).toBeDefined();
-      // Upstream reports seeded routes as active + declared, with the route
-      // settings path under the llm-pi-ai namespace.
-      expect(found?.active).toBe(true);
-      expect(found?.declared).toBe(true);
+      // The current upstream directory reports declaration metadata here;
+      // active adapter routes are exposed separately by listProviders().
+      expect(found).toMatchObject({
+        provider: 'deepseek-free',
+        displayName: 'OpenCode Free Pool',
+        settingsNs: 'llm-pi-ai',
+        settingsPath: ['providers', 'deepseek-free'],
+        declared: true,
+      });
     } finally {
       killTree(proc.pid ?? -1);
       rmSync(home, { recursive: true, force: true });
@@ -163,7 +168,7 @@ describe.skipIf(!HARNESS_BUILT)('contract: browser boot manifest', () => {
     id: z.string().min(1),
     url: z.string().startsWith('/plugins/'),
     rev: z.string().min(1),
-    inject: z.array(z.unknown()),
+    inject: z.array(z.unknown()).optional().default([]),
     // Upstream omits this field for lazy entries; absence is equivalent to
     // false in the browser loader.
     immediately: z.boolean().optional().default(false),
@@ -180,10 +185,9 @@ describe.skipIf(!HARNESS_BUILT)('contract: browser boot manifest', () => {
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     try {
-      const line = await waitForLine(proc, /http:\/\/127\.0\.0\.1:\d+/, TIMEOUT_MS);
-      const base = line.match(/http:\/\/127\.0\.0\.1:\d+/)?.[0];
-      expect(base).toBeDefined();
-      const html = await (await fetch(`${base}/`)).text();
+      const line = await waitForLine(proc, /dsh web: http:\/\/127\.0\.0\.1:\d+\/\?[^\s]+/, TIMEOUT_MS);
+      const { base, cookie } = await authenticatePrintedUrl(line);
+      const html = await (await fetch(`${base}/`, { headers: { cookie } })).text();
       const marker = ['globalThis["__DSH_BOOT__"] = ', 'window.__DSH_BOOT__ = ']
         .find((candidate) => html.includes(candidate));
       if (marker === undefined) throw new Error('boot manifest marker not found');
@@ -240,6 +244,20 @@ function waitForLine(
     proc.stderr?.on('data', onData);
     proc.on('exit', onExit);
   });
+}
+
+/** Exchange the current upstream launch token for the authority-bound cookie. */
+async function authenticatePrintedUrl(line: string): Promise<{ base: string; cookie: string }> {
+  const printed = line.match(/dsh web: (http:\/\/127\.0\.0\.1:\d+\/\?[^\s]+)/)?.[1]
+  if (printed === undefined) throw new Error(`authenticated dsh URL not found in readiness line:\n${line}`)
+  const login = await fetch(printed, { redirect: 'manual' })
+  expect(login.status).toBe(303)
+  const setCookie = login.headers.get('set-cookie')
+  if (setCookie === null) throw new Error('dsh web authentication response did not set a cookie')
+  const cookie = setCookie.split(';', 1)[0]
+  const base = new URL(printed)
+  base.search = ''
+  return { base: base.origin, cookie }
 }
 
 function killTree(pid: number): void {

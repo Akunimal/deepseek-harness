@@ -22,4 +22,13 @@ describe('native shell locale', () => {
     initLocale('en-US');
     expect(locale()).toBe('en');
   });
+
+  it('points incomplete-install recovery at the last known-good stable release', () => {
+    setLocale('es');
+    expect(t('preflight.reinstallHint')).toContain('v0.4.3');
+    setLocale('en');
+    expect(t('preflight.reinstallHint')).toContain('v0.4.3');
+    setLocale('zh');
+    expect(t('preflight.reinstallHint')).toContain('v0.4.3');
+  });
 });

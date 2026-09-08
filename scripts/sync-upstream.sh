@@ -45,6 +45,9 @@ SYNC_CREATED_BRANCH=1
 echo "sync-upstream: subtree pull into $PREFIX"
 git subtree pull --prefix="$PREFIX" "$UPSTREAM_REMOTE" FETCH_HEAD --squash
 
+echo "sync-upstream: applying modular FreeCode patches"
+pnpm apply:upstream-patches
+
 echo "sync-upstream: running contract tests"
 if ! pnpm test:contract; then
   echo "sync-upstream: contract tests failed" >&2

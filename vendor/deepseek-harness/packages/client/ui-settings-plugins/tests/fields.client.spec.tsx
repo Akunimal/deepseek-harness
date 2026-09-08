@@ -2,7 +2,7 @@
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { SecretField, ValueField } from '../src/client/fields.tsx'
+import { SecretField, ToggleField, ValueField } from '../src/client/fields.tsx'
 
 afterEach(cleanup)
 
@@ -78,6 +78,49 @@ describe('ValueField', () => {
     render(<ValueField {...frame} disabled overridden text="9000" onEdit={vi.fn()} onReset={vi.fn()} />)
 
     expect(screen.getByLabelText('Command timeout')).toHaveProperty('disabled', true)
+    expect(screen.getByRole('button', { name: 'Reset to default' })).toHaveProperty('disabled', true)
+  })
+})
+
+describe('ToggleField', () => {
+  it('stages the new boolean text without writing', () => {
+    const onEdit = vi.fn()
+    render(
+      <ToggleField
+        {...frame}
+        id="rtk"
+        label="Use RTK"
+        hint="Optional"
+        checked
+        text="true"
+        onEdit={onEdit}
+        onReset={vi.fn()}
+      />,
+    )
+
+    fireEvent.click(screen.getByLabelText('Use RTK'))
+
+    expect(onEdit).toHaveBeenCalledWith('false')
+  })
+
+  it('renders the reset affordance and respects read-only mode', () => {
+    const onReset = vi.fn()
+    render(
+      <ToggleField
+        {...frame}
+        id="caveman"
+        label="Use Caveman"
+        hint="Optional"
+        checked={false}
+        overridden
+        disabled
+        text="false"
+        onEdit={vi.fn()}
+        onReset={onReset}
+      />,
+    )
+
+    expect(screen.getByLabelText('Use Caveman')).toHaveProperty('disabled', true)
     expect(screen.getByRole('button', { name: 'Reset to default' })).toHaveProperty('disabled', true)
   })
 })

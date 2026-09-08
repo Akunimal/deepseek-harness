@@ -129,6 +129,28 @@ export function numberField(field: string): CardFieldSpec {
 }
 
 /**
+ * A boolean settings field. An empty draft clears the field; any other draft
+ * must be the exact text emitted by the toggle so malformed values cannot be
+ * smuggled into the settings document.
+ * @param field - field name inside the namespace section.
+ * @returns the field's conversion spec.
+ */
+export function booleanField(field: string): CardFieldSpec {
+  return {
+    field,
+    format: value => typeof value === 'boolean' ? String(value) : '',
+    parse: (text) => {
+      const trimmed = text.trim()
+      if (trimmed === '') return { kind: 'clear' }
+      if (trimmed === 'true' || trimmed === 'false') {
+        return { kind: 'set', value: trimmed === 'true' }
+      }
+      return undefined
+    },
+  }
+}
+
+/**
  * A free-text field. An empty draft clears the field, so emptying the control
  * and saving is the same gesture as resetting it.
  * @param field - field name inside the namespace section.

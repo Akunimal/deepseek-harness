@@ -74,6 +74,8 @@ function renderBashCard(state: Partial<BashCardState> = {}) {
     ...settled,
     timeoutMs: field('60000'),
     maxOutputBytes: field('64000'),
+    rtk: field('true'),
+    caveman: field('false'),
     ...state,
   })
   const actions = cardActions()
@@ -224,6 +226,8 @@ describe('BashCard', () => {
 
     expect(screen.getByLabelText(en.bashTimeoutMs)).toBeTruthy()
     expect(screen.getByLabelText(en.bashMaxOutputBytes)).toBeTruthy()
+    expect(screen.getByLabelText(en.bashRtk)).toBeTruthy()
+    expect(screen.getByLabelText(en.bashCaveman)).toBeTruthy()
   })
 
   it('stages an edit instead of writing it', () => {
@@ -256,6 +260,17 @@ describe('BashCard', () => {
 
     expect(actions.edit).toHaveBeenCalledWith('maxOutputBytes', '1024')
     expect(actions.resetField).toHaveBeenCalledWith('maxOutputBytes')
+  })
+
+  it('stages independent RTK and Caveman toggles', () => {
+    const actions = renderBash()
+    fireEvent.click(screen.getByText(en.bashTitle))
+
+    fireEvent.click(screen.getByLabelText(en.bashRtk))
+    fireEvent.click(screen.getByLabelText(en.bashCaveman))
+
+    expect(actions.edit).toHaveBeenNthCalledWith(1, 'rtk', 'false')
+    expect(actions.edit).toHaveBeenNthCalledWith(2, 'caveman', 'true')
   })
 
   it('keeps save and discard inert until something is staged', () => {

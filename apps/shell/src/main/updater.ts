@@ -197,7 +197,10 @@ export function createUpdateService(options: UpdateServiceOptions = {}): UpdateS
         // Setting autoDownload=false avoids a double-download race; the
         // explicit downloadUpdate() ensures the installer lands in the
         // pending directory before quitAndInstall() spawns it.
-        if (adapter.downloadUpdate) await adapter.downloadUpdate();
+        if (!adapter.downloadUpdate) {
+          throw new Error('electron-updater did not expose downloadUpdate; refusing to install an unverified pending update');
+        }
+        await adapter.downloadUpdate();
         log('update downloaded, initiating install', { version: checked.info.version });
         adapter.quitAndInstall(true);
         return { status: 'installed' };

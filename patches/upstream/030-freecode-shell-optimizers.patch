@@ -1,0 +1,698 @@
+diff --git a/vendor/deepseek-harness/packages/client/ui-settings-plugins/src/client/BashCard.tsx b/vendor/deepseek-harness/packages/client/ui-settings-plugins/src/client/BashCard.tsx
+index ff130769a0..6c74d0c2f5 100644
+--- a/vendor/deepseek-harness/packages/client/ui-settings-plugins/src/client/BashCard.tsx
++++ b/vendor/deepseek-harness/packages/client/ui-settings-plugins/src/client/BashCard.tsx
+@@ -1,7 +1,7 @@
+ /** The shell plugin's card: the limits every command the agent runs is bound by. */
+
+ import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+-import { ValueField } from './fields.tsx'
++import { ToggleField, ValueField } from './fields.tsx'
+ import { PluginCard } from './PluginCard.tsx'
+ import type { BashCardFace } from './bash-card-controller.ts'
+ import type {} from './slot-contract.ts'
+@@ -56,6 +56,32 @@ export function BashCard(props: BashCardProps) {
+         onEdit={(text) => { props.edit('maxOutputBytes', text) }}
+         onReset={() => { props.resetField('maxOutputBytes') }}
+       />
++      <ToggleField
++        id="plugin-config-bash-rtk"
++        label={t('bashRtk')}
++        hint={t('bashRtkHint')}
++        overriddenLabel={t('overridden')}
++        resetLabel={t('reset')}
++        invalidLabel={t('invalidNumber')}
++        disabled={disabled}
++        checked={state.rtk.text === 'true'}
++        {...state.rtk}
++        onEdit={(text) => { props.edit('rtk', text) }}
++        onReset={() => { props.resetField('rtk') }}
++      />
++      <ToggleField
++        id="plugin-config-bash-caveman"
++        label={t('bashCaveman')}
++        hint={t('bashCavemanHint')}
++        overriddenLabel={t('overridden')}
++        resetLabel={t('reset')}
++        invalidLabel={t('invalidNumber')}
++        disabled={disabled}
++        checked={state.caveman.text === 'true'}
++        {...state.caveman}
++        onEdit={(text) => { props.edit('caveman', text) }}
++        onReset={() => { props.resetField('caveman') }}
++      />
+     </PluginCard>
+   )
+ }
+diff --git a/vendor/deepseek-harness/packages/client/ui-settings-plugins/src/client/bash-card-controller.ts b/vendor/deepseek-harness/packages/client/ui-settings-plugins/src/client/bash-card-controller.ts
+index 3ad8c6fefe..821f912dcd 100644
+--- a/vendor/deepseek-harness/packages/client/ui-settings-plugins/src/client/bash-card-controller.ts
++++ b/vendor/deepseek-harness/packages/client/ui-settings-plugins/src/client/bash-card-controller.ts
+@@ -2,7 +2,10 @@
+
+ import type { SnapshotStore } from '@deepseek-ai/dsh-client-store'
+ import type { SettingsScope } from '@deepseek-ai/dsh-client-ui-settings/client'
+-import { CardForm, numberField, type CardActions, type CardFieldState, type CardShell } from './card-form.ts'
++import {
++  booleanField, CardForm, numberField,
++  type CardActions, type CardFieldState, type CardShell,
++} from './card-form.ts'
+
+ /**
+  * Namespace of the shell capability. Spelled here rather than imported: a
+@@ -17,6 +20,10 @@ export interface BashSettings {
+   timeoutMs?: number
+   /** Per-stream in-memory output cap in bytes. */
+   maxOutputBytes?: number
++  /** Whether to use an installed RTK binary for eligible commands. */
++  rtk?: boolean
++  /** Whether to use an installed Caveman binary for eligible commands. */
++  caveman?: boolean
+ }
+
+ /** What the shell card renders. */
+@@ -25,6 +32,10 @@ export interface BashCardState extends CardShell {
+   timeoutMs: CardFieldState
+   /** Per-stream output cap in bytes. */
+   maxOutputBytes: CardFieldState
++  /** Optional RTK output compression toggle. */
++  rtk: CardFieldState
++  /** Optional Caveman context compression toggle. */
++  caveman: CardFieldState
+ }
+
+ /** The registration-side face the shell card's slot entry injects. */
+@@ -42,7 +53,10 @@ export class BashCardController {
+
+   /** @param scope - the bound settings scope for the `bash` namespace. */
+   constructor(scope: SettingsScope<BashSettings>) {
+-    this.form = new CardForm(scope, [numberField('timeoutMs'), numberField('maxOutputBytes')])
++    this.form = new CardForm(scope, [
++      numberField('timeoutMs'), numberField('maxOutputBytes'),
++      booleanField('rtk'), booleanField('caveman'),
++    ])
+     this.store = this.form.bind(() => this.projection())
+   }
+
+@@ -51,6 +65,8 @@ export class BashCardController {
+       ...this.form.shell(),
+       timeoutMs: this.form.field('timeoutMs'),
+       maxOutputBytes: this.form.field('maxOutputBytes'),
++      rtk: this.form.field('rtk'),
++      caveman: this.form.field('caveman'),
+     }
+   }
+
+diff --git a/vendor/deepseek-harness/packages/client/ui-settings-plugins/src/client/card-form.ts b/vendor/deepseek-harness/packages/client/ui-settings-plugins/src/client/card-form.ts
+index 365a2e8fd8..3335caf0d6 100644
+--- a/vendor/deepseek-harness/packages/client/ui-settings-plugins/src/client/card-form.ts
++++ b/vendor/deepseek-harness/packages/client/ui-settings-plugins/src/client/card-form.ts
+@@ -128,6 +128,28 @@ export function numberField(field: string): CardFieldSpec {
+   }
+ }
+
++/**
++ * A boolean settings field. An empty draft clears the field; any other draft
++ * must be the exact text emitted by the toggle so malformed values cannot be
++ * smuggled into the settings document.
++ * @param field - field name inside the namespace section.
++ * @returns the field's conversion spec.
++ */
++export function booleanField(field: string): CardFieldSpec {
++  return {
++    field,
++    format: value => typeof value === 'boolean' ? String(value) : '',
++    parse: (text) => {
++      const trimmed = text.trim()
++      if (trimmed === '') return { kind: 'clear' }
++      if (trimmed === 'true' || trimmed === 'false') {
++        return { kind: 'set', value: trimmed === 'true' }
++      }
++      return undefined
++    },
++  }
++}
++
+ /**
+  * A free-text field. An empty draft clears the field, so emptying the control
+  * and saving is the same gesture as resetting it.
+diff --git a/vendor/deepseek-harness/packages/client/ui-settings-plugins/src/client/fields.module.css b/vendor/deepseek-harness/packages/client/ui-settings-plugins/src/client/fields.module.css
+index b0ab9eaef9..00999bab57 100644
+--- a/vendor/deepseek-harness/packages/client/ui-settings-plugins/src/client/fields.module.css
++++ b/vendor/deepseek-harness/packages/client/ui-settings-plugins/src/client/fields.module.css
+@@ -100,6 +100,13 @@
+   border-color: var(--dsw-alias-label-error);
+ }
+
++.checkbox {
++  width: 18px;
++  height: 18px;
++  margin: 0;
++  accent-color: var(--dsw-alias-brand-primary);
++}
++
+ .invalid {
+   margin: 0;
+   font-size: 12px;
+diff --git a/vendor/deepseek-harness/packages/client/ui-settings-plugins/src/client/fields.tsx b/vendor/deepseek-harness/packages/client/ui-settings-plugins/src/client/fields.tsx
+index a30998ddad..dc8cb8e013 100644
+--- a/vendor/deepseek-harness/packages/client/ui-settings-plugins/src/client/fields.tsx
++++ b/vendor/deepseek-harness/packages/client/ui-settings-plugins/src/client/fields.tsx
+@@ -87,6 +87,46 @@ export function ValueField(props: FieldProps & {
+   )
+ }
+
++/** A checkbox toggle for a boolean settings field. */
++export function ToggleField(props: FieldProps & {
++  /** Current boolean value represented by the staged draft. */
++  checked: boolean
++}) {
++  return (
++    <div className={css.field}>
++      <div className={css.head}>
++        <label className={css.label} htmlFor={props.id}>{props.label}</label>
++        {props.overridden
++          ? (
++            <span className={css.badges}>
++              <span className={css.badge}>{props.overriddenLabel}</span>
++              <button
++                type="button"
++                className={css.reset}
++                disabled={props.disabled}
++                onClick={props.onReset}
++              >
++                {props.resetLabel}
++              </button>
++            </span>
++          )
++          : null}
++        <input
++          id={props.id}
++          className={css.checkbox}
++          type="checkbox"
++          checked={props.checked}
++          disabled={props.disabled}
++          onChange={(event) => { props.onEdit(String(event.currentTarget.checked)) }}
++        />
++      </div>
++      <p className={props.invalid ? css.invalid : css.hint}>
++        {props.invalid ? props.invalidLabel : props.hint}
++      </p>
++    </div>
++  )
++}
++
+ /**
+  * A write-only credential control. The value never rides a response, so the
+  * control reports only whether one is configured and starts blank; a blank
+diff --git a/vendor/deepseek-harness/packages/client/ui-settings-plugins/src/client/locales.ts b/vendor/deepseek-harness/packages/client/ui-settings-plugins/src/client/locales.ts
+index b68ab80beb..c70b51b39d 100644
+--- a/vendor/deepseek-harness/packages/client/ui-settings-plugins/src/client/locales.ts
++++ b/vendor/deepseek-harness/packages/client/ui-settings-plugins/src/client/locales.ts
+@@ -7,6 +7,7 @@ export type PluginsSettingsLocaleKey =
+   | 'save' | 'saving' | 'discard' | 'unsaved' | 'saveFailed' | 'invalidNumber'
+   | 'bashTitle' | 'bashDescription' | 'bashTimeoutMs' | 'bashTimeoutMsHint'
+   | 'bashMaxOutputBytes' | 'bashMaxOutputBytesHint'
++  | 'bashRtk' | 'bashRtkHint' | 'bashCaveman' | 'bashCavemanHint'
+   | 'agentLoopTitle' | 'agentLoopDescription' | 'agentLoopMaxParallel' | 'agentLoopMaxParallelHint'
+   | 'webSearchTitle' | 'webSearchDescription'
+   | 'webSearchApiKey' | 'webSearchApiKeyHint' | 'webSearchApiKeySet' | 'webSearchApiKeyUnset'
+@@ -43,6 +44,10 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
+   bashTimeoutMsHint: 'How long one command may run before it is terminated.',
+   bashMaxOutputBytes: 'Output cap per stream (bytes)',
+   bashMaxOutputBytesHint: 'Output beyond this spills to a temporary file rather than being lost.',
++  bashRtk: 'Use RTK token compression',
++  bashRtkHint: 'Uses an already-installed RTK for eligible simple CLI commands. Missing RTK changes nothing.',
++  bashCaveman: 'Use Caveman context compression',
++  bashCavemanHint: 'Compresses eligible command output. Requires Caveman installed separately; missing Caveman changes nothing.',
+   agentLoopTitle: 'Agent loop',
+   agentLoopDescription: 'How the agent dispatches tool calls.',
+   agentLoopMaxParallel: 'Parallel tool calls',
+@@ -99,6 +104,10 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
+   bashTimeoutMsHint: '单条命令允许运行多久，超时即终止。',
+   bashMaxOutputBytes: '单流输出上限（字节）',
+   bashMaxOutputBytesHint: '超出部分会转存到临时文件，而不是被丢弃。',
++  bashRtk: '使用 RTK 压缩令牌',
++  bashRtkHint: '对符合条件的简单 CLI 命令使用已安装的 RTK。未安装 RTK 时不会改变任何行为。',
++  bashCaveman: '使用 Caveman 上下文压缩',
++  bashCavemanHint: '压缩符合条件的命令输出。需要单独安装 Caveman；未安装时不会改变任何行为。',
+   agentLoopTitle: 'Agent 循环',
+   agentLoopDescription: 'Agent 如何派发工具调用。',
+   agentLoopMaxParallel: '并行工具调用数',
+diff --git a/vendor/deepseek-harness/packages/client/ui-settings-plugins/tests/fields.client.spec.tsx b/vendor/deepseek-harness/packages/client/ui-settings-plugins/tests/fields.client.spec.tsx
+index d9a8d29ac2..7d2146024b 100644
+--- a/vendor/deepseek-harness/packages/client/ui-settings-plugins/tests/fields.client.spec.tsx
++++ b/vendor/deepseek-harness/packages/client/ui-settings-plugins/tests/fields.client.spec.tsx
+@@ -2,7 +2,7 @@
+
+ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+ import { afterEach, describe, expect, it, vi } from 'vitest'
+-import { SecretField, ValueField } from '../src/client/fields.tsx'
++import { SecretField, ToggleField, ValueField } from '../src/client/fields.tsx'
+
+ afterEach(cleanup)
+
+@@ -82,6 +82,49 @@ describe('ValueField', () => {
+   })
+ })
+
++describe('ToggleField', () => {
++  it('stages the new boolean text without writing', () => {
++    const onEdit = vi.fn()
++    render(
++      <ToggleField
++        {...frame}
++        id="rtk"
++        label="Use RTK"
++        hint="Optional"
++        checked
++        text="true"
++        onEdit={onEdit}
++        onReset={vi.fn()}
++      />,
++    )
++
++    fireEvent.click(screen.getByLabelText('Use RTK'))
++
++    expect(onEdit).toHaveBeenCalledWith('false')
++  })
++
++  it('renders the reset affordance and respects read-only mode', () => {
++    const onReset = vi.fn()
++    render(
++      <ToggleField
++        {...frame}
++        id="caveman"
++        label="Use Caveman"
++        hint="Optional"
++        checked={false}
++        overridden
++        disabled
++        text="false"
++        onEdit={vi.fn()}
++        onReset={onReset}
++      />,
++    )
++
++    expect(screen.getByLabelText('Use Caveman')).toHaveProperty('disabled', true)
++    expect(screen.getByRole('button', { name: 'Reset to default' })).toHaveProperty('disabled', true)
++  })
++})
++
+ describe('SecretField', () => {
+   const secret = {
+     id: 'key',
+diff --git a/vendor/deepseek-harness/packages/client/ui-settings-plugins/tests/section.client.spec.tsx b/vendor/deepseek-harness/packages/client/ui-settings-plugins/tests/section.client.spec.tsx
+index e84a00cf49..db1a361d6b 100644
+--- a/vendor/deepseek-harness/packages/client/ui-settings-plugins/tests/section.client.spec.tsx
++++ b/vendor/deepseek-harness/packages/client/ui-settings-plugins/tests/section.client.spec.tsx
+@@ -74,6 +74,8 @@ function renderBashCard(state: Partial<BashCardState> = {}) {
+     ...settled,
+     timeoutMs: field('60000'),
+     maxOutputBytes: field('64000'),
++    rtk: field('true'),
++    caveman: field('false'),
+     ...state,
+   })
+   const actions = cardActions()
+@@ -224,6 +226,8 @@ describe('BashCard', () => {
+
+     expect(screen.getByLabelText(en.bashTimeoutMs)).toBeTruthy()
+     expect(screen.getByLabelText(en.bashMaxOutputBytes)).toBeTruthy()
++    expect(screen.getByLabelText(en.bashRtk)).toBeTruthy()
++    expect(screen.getByLabelText(en.bashCaveman)).toBeTruthy()
+   })
+
+   it('stages an edit instead of writing it', () => {
+@@ -258,6 +262,17 @@ describe('BashCard', () => {
+     expect(actions.resetField).toHaveBeenCalledWith('maxOutputBytes')
+   })
+
++  it('stages independent RTK and Caveman toggles', () => {
++    const actions = renderBash()
++    fireEvent.click(screen.getByText(en.bashTitle))
++
++    fireEvent.click(screen.getByLabelText(en.bashRtk))
++    fireEvent.click(screen.getByLabelText(en.bashCaveman))
++
++    expect(actions.edit).toHaveBeenNthCalledWith(1, 'rtk', 'false')
++    expect(actions.edit).toHaveBeenNthCalledWith(2, 'caveman', 'true')
++  })
++
+   it('keeps save and discard inert until something is staged', () => {
+     renderBash()
+     fireEvent.click(screen.getByText(en.bashTitle))
+diff --git a/vendor/deepseek-harness/packages/shell/bash-local/src/index.ts b/vendor/deepseek-harness/packages/shell/bash-local/src/index.ts
+index 064f124a00..d4a58d5403 100644
+--- a/vendor/deepseek-harness/packages/shell/bash-local/src/index.ts
++++ b/vendor/deepseek-harness/packages/shell/bash-local/src/index.ts
+@@ -11,7 +11,10 @@
+
+ import { Context } from '@deepseek-ai/cordis'
+ import z from '@deepseek-ai/schemastery'
+-import { SHELL_SETTINGS_NAMESPACE, ShellExecutor } from '@deepseek-ai/dsh-shell'
++import {
++  resolveCaveman, resolveRtk, SHELL_SETTINGS_NAMESPACE, ShellExecutor,
++  wrapWithCaveman, wrapWithRtk,
++} from '@deepseek-ai/dsh-shell'
+ import type { ShellExecRequest, ShellExecSpec, ShellProcess, ShellProcessRead, ShellRunResult, CollectedOutput } from '@deepseek-ai/dsh-shell'
+ import type { SubprocessCollect, SubprocessHandle, SubprocessOutputReader, SubprocessSpawnSpec } from '@deepseek-ai/dsh-subprocess'
+ import type {} from '@deepseek-ai/dsh-settings'
+@@ -51,6 +54,10 @@ export interface Config {
+   maxSpillBytes?: number
+   /** Grace period for kill escalation and inherited pipes; at most `MAX_TIMER_DELAY_MS`. */
+   graceMs?: number
++  /** Use an already-installed RTK binary to compress eligible CLI output. */
++  rtk?: boolean
++  /** Use an already-installed Caveman binary to compress eligible CLI output. */
++  caveman?: boolean
+ }
+
+ /** The shape after schemastery applied the defaults (cwd has none). */
+@@ -109,11 +116,19 @@ export class LocalBashExecutor extends ShellExecutor {
+     maxOutputBytes: z.number().default(64_000),
+     maxSpillBytes: z.number().default(DEFAULT_MAX_SPILL_BYTES),
+     graceMs: z.number().default(DEFAULT_GRACE_MS),
++    rtk: z.boolean().default(true),
++    caveman: z.boolean().default(false),
+   })
+
+   /** The currently authoritative config: the settings section, or the composition entry. */
+   private source: () => ResolvedConfig
+
++  /** Cached because probing PATH for every command would add avoidable latency. */
++  private readonly rtkInstalled: boolean
++
++  /** Cached because probing PATH for every command would add avoidable latency. */
++  private readonly cavemanInstalled: boolean
++
+   /** Validated config (schemastery applied the defaults before construction). */
+   get config(): ResolvedConfig {
+     return this.source()
+@@ -125,6 +140,8 @@ export class LocalBashExecutor extends ShellExecutor {
+     const entry = config as ResolvedConfig
+     assertServiceableBashConfig(entry)
+     this.source = () => entry
++    this.rtkInstalled = resolveRtk()
++    this.cavemanInstalled = resolveCaveman()
+     ctx.inject(['settings'], (settingsCtx) => {
+       settingsCtx.settings.installSection(ctx, SHELL_SETTINGS_NAMESPACE, LocalBashExecutor.Config, entry, {
+         validate: assertServiceableBashConfig,
+@@ -155,7 +172,10 @@ export class LocalBashExecutor extends ShellExecutor {
+     const stdoutMaxBytes = request.stdoutMaxBytes ?? this.config.maxOutputBytes
+     assertPositiveFinite('request.stdoutMaxBytes', stdoutMaxBytes)
+     return {
+-      command: request.command,
++      command: wrapWithCaveman(
++        wrapWithRtk(request.command, this.config.rtk === true && this.rtkInstalled),
++        this.config.caveman === true && this.cavemanInstalled,
++      ),
+       workdir: request.workdir ?? this.config.cwd ?? process.cwd(),
+       timeoutMs,
+       stdoutMaxBytes,
+diff --git a/vendor/deepseek-harness/packages/shell/bash-local/tests/caveman.spec.ts b/vendor/deepseek-harness/packages/shell/bash-local/tests/caveman.spec.ts
+new file mode 100644
+index 0000000000..07b05e9789
+--- /dev/null
++++ b/vendor/deepseek-harness/packages/shell/bash-local/tests/caveman.spec.ts
+@@ -0,0 +1,24 @@
++import { describe, expect, it } from 'vitest'
++import { canUseCaveman, wrapWithCaveman } from '../../shell/src/caveman.ts'
++
++describe('optional Caveman command wrapper', () => {
++  it('wraps supported plain commands only when Caveman is available', () => {
++    expect(canUseCaveman('git status')).toBe(true)
++    expect(wrapWithCaveman('git status', true)).toBe('caveman compress --stdin "git status"')
++    expect(wrapWithCaveman('ls -la', true)).toBe('caveman compress --stdin "ls -la"')
++  })
++
++  it('rejects unsupported and compound commands', () => {
++    for (const command of [
++      'echo hello', 'pwd', 'cat file | grep foo', 'echo hello && ls',
++      'git status > out.txt', 'git status "$HOME"', 'git status\necho unsafe',
++    ]) {
++      expect(canUseCaveman(command)).toBe(false)
++      expect(wrapWithCaveman(command, true)).toBe(command)
++    }
++  })
++
++  it('does not wrap when Caveman is not available', () => {
++    expect(wrapWithCaveman('git status', false)).toBe('git status')
++  })
++})
+diff --git a/vendor/deepseek-harness/packages/shell/bash-local/tests/rtk.spec.ts b/vendor/deepseek-harness/packages/shell/bash-local/tests/rtk.spec.ts
+new file mode 100644
+index 0000000000..007c37f09f
+--- /dev/null
++++ b/vendor/deepseek-harness/packages/shell/bash-local/tests/rtk.spec.ts
+@@ -0,0 +1,22 @@
++import { describe, expect, it } from 'vitest'
++import { canUseRtk, wrapWithRtk } from '../../shell/src/rtk.ts'
++
++describe('optional RTK command wrapper', () => {
++  it('wraps supported plain commands only when RTK is available', () => {
++    expect(canUseRtk('git status')).toBe(true)
++    expect(wrapWithRtk('git status', true)).toBe('rtk git status')
++    expect(wrapWithRtk('git status', false)).toBe('git status')
++  })
++
++  it('leaves compound or quoted shell commands unchanged', () => {
++    for (const command of ['git status | rg modified', 'git status && git diff', 'echo $HOME', 'git status > out.txt', 'git "status"']) {
++      expect(canUseRtk(command)).toBe(false)
++      expect(wrapWithRtk(command, true)).toBe(command)
++    }
++  })
++
++  it('does not wrap unknown commands', () => {
++    expect(canUseRtk('python script.py')).toBe(false)
++    expect(wrapWithRtk('python script.py', true)).toBe('python script.py')
++  })
++})
+diff --git a/vendor/deepseek-harness/packages/shell/bash-local/tests/settings.spec.ts b/vendor/deepseek-harness/packages/shell/bash-local/tests/settings.spec.ts
+index 5f6464b1c8..31015ab48a 100644
+--- a/vendor/deepseek-harness/packages/shell/bash-local/tests/settings.spec.ts
++++ b/vendor/deepseek-harness/packages/shell/bash-local/tests/settings.spec.ts
+@@ -46,6 +46,8 @@ describe('bash settings section', () => {
+   it('resolves the user layer over the composition entry', async () => {
+     const bench = await boot()
+     expect(bench.bash.config.timeoutMs).toBe(60_000)
++    expect(bench.bash.config.rtk).toBe(true)
++    expect(bench.bash.config.caveman).toBe(false)
+
+     await bench.ctx.settings.update(SHELL_SETTINGS_NAMESPACE, { timeoutMs: 5_000 })
+
+@@ -53,6 +55,15 @@ describe('bash settings section', () => {
+     await bench.ctx.fiber.dispose()
+   })
+
++  it('applies the RTK and Caveman toggles from the live settings section', async () => {
++    const bench = await boot()
++    await bench.ctx.settings.update(SHELL_SETTINGS_NAMESPACE, { rtk: false, caveman: true })
++
++    expect(bench.bash.config.rtk).toBe(false)
++    expect(bench.bash.config.caveman).toBe(true)
++    await bench.ctx.fiber.dispose()
++  })
++
+   it('refuses a stored value the constructor would have rejected', async () => {
+     const bench = await boot()
+
+diff --git a/vendor/deepseek-harness/packages/shell/pwsh-local/src/index.ts b/vendor/deepseek-harness/packages/shell/pwsh-local/src/index.ts
+index 93133b37af..17d2b979a3 100644
+--- a/vendor/deepseek-harness/packages/shell/pwsh-local/src/index.ts
++++ b/vendor/deepseek-harness/packages/shell/pwsh-local/src/index.ts
+@@ -17,7 +17,10 @@
+    design (see this package's README), so the two import the same seam surface */
+ import { Context } from '@deepseek-ai/cordis'
+ import z from '@deepseek-ai/schemastery'
+-import { SHELL_SETTINGS_NAMESPACE, ShellExecutor } from '@deepseek-ai/dsh-shell'
++import {
++  resolveCaveman, resolveRtk, SHELL_SETTINGS_NAMESPACE, ShellExecutor,
++  wrapWithCaveman, wrapWithRtk,
++} from '@deepseek-ai/dsh-shell'
+ import type { ShellExecRequest, ShellExecSpec, ShellProcess, ShellProcessRead, ShellRunResult, CollectedOutput } from '@deepseek-ai/dsh-shell'
+ import type { SubprocessCollect, SubprocessHandle, SubprocessOutputReader, SubprocessSpawnSpec } from '@deepseek-ai/dsh-subprocess'
+ import type {} from '@deepseek-ai/dsh-settings'
+@@ -68,6 +71,10 @@ export interface Config {
+   maxSpillBytes?: number
+   /** Grace period for kill escalation and inherited pipes; at most `MAX_TIMER_DELAY_MS`. */
+   graceMs?: number
++  /** Use an already-installed RTK binary to compress eligible CLI output. */
++  rtk?: boolean
++  /** Use an already-installed Caveman binary to compress eligible CLI output. */
++  caveman?: boolean
+   /**
+    * Explicit pwsh executable. When omitted, well-known Windows install
+    * locations and PATH entries are probed in order (PowerShell 7 install,
+@@ -136,6 +143,8 @@ export class PwshLocalExecutor extends ShellExecutor {
+     maxSpillBytes: z.number().default(DEFAULT_MAX_SPILL_BYTES),
+     graceMs: z.number().default(DEFAULT_GRACE_MS),
+     pwshPath: z.string(),
++    rtk: z.boolean().default(true),
++    caveman: z.boolean().default(false),
+   })
+
+   /** The currently authoritative config: the settings section, or the composition entry. */
+@@ -147,6 +156,12 @@ export class PwshLocalExecutor extends ShellExecutor {
+   /** The pwsh executable resolved from the current config. */
+   private resolvedPwshPath: string
+
++  /** Cached because probing PATH for every command would add avoidable latency. */
++  private readonly rtkInstalled: boolean
++
++  /** Cached because probing PATH for every command would add avoidable latency. */
++  private readonly cavemanInstalled: boolean
++
+   /** Validated config (schemastery applied the defaults before construction). */
+   get config(): ResolvedConfig {
+     return this.source()
+@@ -165,6 +180,8 @@ export class PwshLocalExecutor extends ShellExecutor {
+     this.source = () => entry
+     this.declaredPwshPath = entry.pwshPath
+     this.resolvedPwshPath = resolvePwshPath(entry.pwshPath)
++    this.rtkInstalled = resolveRtk()
++    this.cavemanInstalled = resolveCaveman()
+     ctx.inject(['settings'], (settingsCtx) => {
+       settingsCtx.settings.installSection(ctx, SHELL_SETTINGS_NAMESPACE, PwshLocalExecutor.Config, entry, {
+         validate: assertServiceablePwshConfig,
+@@ -198,7 +215,10 @@ export class PwshLocalExecutor extends ShellExecutor {
+     const stdoutMaxBytes = request.stdoutMaxBytes ?? this.config.maxOutputBytes
+     assertPositiveFinite('request.stdoutMaxBytes', stdoutMaxBytes)
+     return {
+-      command: request.command,
++      command: wrapWithCaveman(
++        wrapWithRtk(request.command, this.config.rtk === true && this.rtkInstalled),
++        this.config.caveman === true && this.cavemanInstalled,
++      ),
+       workdir: request.workdir ?? this.config.cwd ?? process.cwd(),
+       timeoutMs,
+       stdoutMaxBytes,
+diff --git a/vendor/deepseek-harness/packages/shell/pwsh-local/tests/settings.spec.ts b/vendor/deepseek-harness/packages/shell/pwsh-local/tests/settings.spec.ts
+index 22a4effe0a..9d8db8488c 100644
+--- a/vendor/deepseek-harness/packages/shell/pwsh-local/tests/settings.spec.ts
++++ b/vendor/deepseek-harness/packages/shell/pwsh-local/tests/settings.spec.ts
+@@ -46,6 +46,8 @@ describe('pwsh executor over the bash settings section', () => {
+   it('resolves the user layer over the composition entry', async () => {
+     const bench = await boot()
+     expect(bench.pwsh.config.timeoutMs).toBe(60_000)
++    expect(bench.pwsh.config.rtk).toBe(true)
++    expect(bench.pwsh.config.caveman).toBe(false)
+
+     await bench.ctx.settings.update(SHELL_SETTINGS_NAMESPACE, { timeoutMs: 5_000 })
+
+@@ -53,6 +55,15 @@ describe('pwsh executor over the bash settings section', () => {
+     await bench.ctx.fiber.dispose()
+   })
+
++  it('applies the RTK and Caveman toggles from the live settings section', async () => {
++    const bench = await boot()
++    await bench.ctx.settings.update(SHELL_SETTINGS_NAMESPACE, { rtk: false, caveman: true })
++
++    expect(bench.pwsh.config.rtk).toBe(false)
++    expect(bench.pwsh.config.caveman).toBe(true)
++    await bench.ctx.fiber.dispose()
++  })
++
+   it('refuses a stored value the constructor would have rejected', async () => {
+     const bench = await boot()
+
+diff --git a/vendor/deepseek-harness/packages/shell/shell/src/caveman.ts b/vendor/deepseek-harness/packages/shell/shell/src/caveman.ts
+new file mode 100644
+index 0000000000..f39b78bfaf
+--- /dev/null
++++ b/vendor/deepseek-harness/packages/shell/shell/src/caveman.ts
+@@ -0,0 +1,37 @@
++import { spawnSync } from 'node:child_process'
++
++/** Commands whose plain output is safe for Caveman to summarize. */
++const CAVEMAN_COMMANDS = new Set([
++  'cat', 'head', 'tail', 'grep', 'rg', 'find', 'ls', 'dir',
++  'git', 'pnpm', 'npm', 'yarn', 'node', 'python', 'pip',
++])
++
++// Caveman receives the command as a quoted argument. Reject syntax that could
++// be reinterpreted by the host shell or break that argument boundary.
++const SHELL_META = /[|&;<>`$(){}'"\\\r\n]/
++
++/** Check whether the optional caveman executable is available on PATH. */
++export function resolveCaveman(): boolean {
++  try {
++    return spawnSync('caveman', ['--version'], {
++      timeout: 2_000,
++      stdio: 'ignore',
++      windowsHide: true,
++    }).status === 0
++  } catch {
++    return false
++  }
++}
++
++/** Whether a command is a safe, plain invocation eligible for compression. */
++export function canUseCaveman(command: string): boolean {
++  const trimmed = command.trim()
++  if (!trimmed || SHELL_META.test(trimmed)) return false
++  const executable = trimmed.split(/\s+/, 1)[0]?.split('/').pop()?.split('\\').pop()
++  return executable !== undefined && CAVEMAN_COMMANDS.has(executable)
++}
++
++/** Add the Caveman wrapper only when the caller enabled it and the command is safe. */
++export function wrapWithCaveman(command: string, available: boolean): string {
++  return available && canUseCaveman(command) ? `caveman compress --stdin "${command}"` : command
++}
+diff --git a/vendor/deepseek-harness/packages/shell/shell/src/index.ts b/vendor/deepseek-harness/packages/shell/shell/src/index.ts
+index 8bcdaae208..20b1f9e8a7 100644
+--- a/vendor/deepseek-harness/packages/shell/shell/src/index.ts
++++ b/vendor/deepseek-harness/packages/shell/shell/src/index.ts
+@@ -35,6 +35,8 @@ export type {
+ } from './types.ts'
+ export { parseExitStatus } from './render.ts'
+ export type { ParsedExitStatus } from './render.ts'
++export { canUseRtk, resolveRtk, wrapWithRtk } from './rtk.ts'
++export { canUseCaveman, resolveCaveman, wrapWithCaveman } from './caveman.ts'
+
+ declare module '@deepseek-ai/cordis' {
+   interface Context {
+diff --git a/vendor/deepseek-harness/packages/shell/shell/src/rtk.ts b/vendor/deepseek-harness/packages/shell/shell/src/rtk.ts
+new file mode 100644
+index 0000000000..00552ebddb
+--- /dev/null
++++ b/vendor/deepseek-harness/packages/shell/shell/src/rtk.ts
+@@ -0,0 +1,38 @@
++import { spawnSync } from 'node:child_process'
++
++/** Commands whose plain output is safe for RTK to summarize. */
++const RTK_COMMANDS = new Set([
++  'bun', 'cargo', 'docker', 'gh', 'git', 'go', 'kubectl', 'npm', 'npx',
++  'pnpm', 'pytest', 'rg', 'ruff', 'rustc', 'vitest', 'yarn',
++])
++
++// Do not hand shell syntax to a second command wrapper. This also keeps the
++// wrapper from changing the meaning of pipelines, redirects, substitutions,
++// quoting, or multi-line commands.
++const SHELL_META = /[|&;<>`$(){}'"\\\r\n]/
++
++/** Whether a command is a plain invocation that RTK may summarize. */
++export function canUseRtk(command: string): boolean {
++  const trimmed = command.trim()
++  if (!trimmed || SHELL_META.test(trimmed)) return false
++  const executable = trimmed.split(/\s+/, 1)[0]
++  return executable !== undefined && RTK_COMMANDS.has(executable)
++}
++
++/** Add the RTK prefix only when the caller enabled it and the command is safe. */
++export function wrapWithRtk(command: string, available: boolean): string {
++  return available && canUseRtk(command) ? `rtk ${command}` : command
++}
++
++/** RTK is an optional user-installed accelerator. Detection is best effort. */
++export function resolveRtk(): boolean {
++  try {
++    return spawnSync('rtk', ['--version'], {
++      timeout: 2_000,
++      stdio: 'ignore',
++      windowsHide: true,
++    }).status === 0
++  } catch {
++    return false
++  }
++}

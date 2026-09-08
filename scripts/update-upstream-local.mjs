@@ -30,6 +30,9 @@ git(['fetch', '--no-tags', remote, ref]);
 console.log(`update-upstream-local: updating ${prefix}`);
 git(['subtree', 'pull', `--prefix=${prefix}`, remote, 'FETCH_HEAD', '--squash', '-m', `chore: sync ${prefix} from ${remote}/${ref}`]);
 
+console.log('update-upstream-local: applying modular FreeCode patches');
+run(process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm', ['apply:upstream-patches']);
+
 console.log('update-upstream-local: rebuilding only the DeepSeek Harness runtime');
 run(process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm', ['package:runtime']);
 console.log('update-upstream-local: Harness runtime update complete; opencode2api and the shell were preserved');

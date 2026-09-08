@@ -14,6 +14,7 @@ import { createUpdateService, isNewerVersion, type UpdateCheckResult, type Updat
 import { createHarnessUpdater } from './harness-updater.js';
 import { createEmbeddedBrowser, type EmbeddedBrowser } from './embedded-browser.js';
 import { createDialogBridge, type DialogBridge } from './dialog-bridge.js';
+import { buildHarnessExtraEnv } from './harness-env.js';
 import { awaitHarnessLayout, formatPreflightFailure } from './preflight.js';
 import { initLocale, setLocale as setNativeLocale, t } from './i18n.js';
 import { shouldNotifyBackendState, type BackendState } from './backend-state.js';
@@ -149,13 +150,7 @@ async function bootstrap(): Promise<ShellRuntime> {
     secrets,
     secretEnvNames: ['FREECODE_PUBLIC_KEY'],
     nodeEnv: nodeRuntimeEnv(app.isPackaged),
-    extraEnv: {
-      DSH_CLIENT_TITLE: 'FreeCode',
-      ...(dialogBridge ? {
-        FREECODE_DIALOG_BRIDGE_ENDPOINT: dialogBridge.endpoint,
-        FREECODE_DIALOG_BRIDGE_TOKEN: dialogBridge.token,
-      } : {}),
-    },
+    extraEnv: buildHarnessExtraEnv(dialogBridge),
     browserBridge: embeddedBrowser ? { endpoint: embeddedBrowser.endpoint, token: embeddedBrowser.token } : undefined,
     // The LB fires this once when every ready worker is rate-limited. The
     // concrete handler is assigned after enableTorfleet is defined; a 429
@@ -188,7 +183,10 @@ let updateIndicatorView: WebContentsView | null = null;
 let latestUpdateResult: UpdateCheckResult | null = null;
 let updateCheckInFlight: Promise<UpdateCheckResult | null> | null = null;
 let updateIndicatorPlacement = 0;
-const UPDATE_INDICATOR_SIZE = 36;
+const UPDATE_INDICATOR_WIDTH = 34;
+const UPDATE_INDICATOR_HEIGHT = 34;
+type UpdateActivity = 'idle' | 'downloading' | 'installing';
+let updateActivity: UpdateActivity = 'idle';
 let torfleetEnabled = false;
 let torfleetOnChangeCleanup: (() => void) | null = null;
 /** Assigned once enableTorfleet exists; the LB's rate-limit callback delegates
@@ -359,13 +357,27 @@ function updateIsAvailable(result: UpdateCheckResult | null): boolean {
 
 function renderUpdateIndicatorHtml(): string {
   const label = t('update.indicator');
+  const safeLabel = label
+    .replaceAll('&', '&amp;')
+    .replaceAll('"', '&quot;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;');
   return `<!doctype html><html><head><meta charset="utf-8"><style>
 *{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;background:transparent;overflow:hidden}
-a{display:inline-flex;align-items:center;justify-content:center;text-decoration:none;
-  color:#c9ced8;background:#262a33;border:1px solid #3c424e;border-radius:50%;
-  width:36px;height:36px;font-size:16px;cursor:pointer;box-shadow:0 2px 8px #0005}
-a:hover{color:#fff;background:#343a46;border-color:#6b7484}a:active{transform:translateY(1px)}
-</style></head><body><a href="freecode://updates/open" aria-label="${label}" title="${label}">&#8595;</a></body></html>`;
+/* Keep this in lockstep with ui-conversation/InputBar.module.css .primary:
+   the update action is the send button's twin, with only the arrow reversed. */
+button{display:grid;place-items:center;flex:none;width:34px;height:34px;border:none;
+  border-radius:999px;corner-shape:round;background:rgb(65,118,230);color:#fff;cursor:pointer;
+  transition:background-color 100ms ease;transform:translateY(-2px)}
+button:hover:not(:disabled){background:rgb(103,158,254)}
+button:disabled{opacity:.4;cursor:default}
+@media (prefers-color-scheme:dark){
+  button{background:rgb(103,158,254)}
+  button:hover:not(:disabled){background:rgb(65,118,230)}
+}
+</style></head><body><button type="button" aria-label="${safeLabel}" title="${safeLabel}" onclick="window.location.href='freecode://updates/open'">
+<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path transform="rotate(180 8 8)" d="M8.3125 0.980183C8.66767 1.0531 8.97902 1.20418 9.2627 1.43233C9.48724 1.61297 9.73029 1.85793 9.97949 2.10714L14.707 6.83468L13.293 8.24874L9 3.95577V15.0417H7V3.95577L2.70703 8.24874L1.29297 6.83468L6.02051 2.10714C6.26971 1.85793 6.51277 1.61297 6.7373 1.43233C6.97662 1.23986 7.28445 1.04402 7.6875 0.980183C7.8973 0.947006 8.1031 0.95516 8.3125 0.980183Z" fill="currentColor" /></svg>
+</button></body></html>`;
 }
 
 function updateUpdateIndicatorBounds(): void {
@@ -381,7 +393,12 @@ function updateUpdateIndicatorBounds(): void {
   // The settings trigger owns the sidebar footer geometry. Use a right-side
   // slot in its row rather than fixed x=6, which sits on top of the gear in
   // the wide sidebar. The fallback is only used before the page has mounted.
-  const fallback = { x: 230, y: Math.max(0, height - 37), width: UPDATE_INDICATOR_SIZE, height: UPDATE_INDICATOR_SIZE };
+  const fallback = {
+    x: 230,
+    y: Math.max(0, height - UPDATE_INDICATOR_HEIGHT - 7),
+    width: UPDATE_INDICATOR_WIDTH,
+    height: UPDATE_INDICATOR_HEIGHT,
+  };
   updateIndicatorView.setBounds(fallback);
   // Query the DOM in the harness WebContentsView (not mainWindow.webContents,
   // which is now blank since the harness renders in a nested view).
@@ -402,9 +419,14 @@ function updateUpdateIndicatorBounds(): void {
     const rail = anchor.width <= 60;
     const x = rail
       ? Math.round(harnessBounds.x + anchor.right + 6)
-      : Math.round(harnessBounds.x + anchor.right - (UPDATE_INDICATOR_SIZE + 6));
-    const y = Math.round(harnessBounds.y + anchor.top + (anchor.height - UPDATE_INDICATOR_SIZE) / 2);
-    updateIndicatorView.setBounds({ x: Math.max(0, x), y: Math.max(0, y), width: UPDATE_INDICATOR_SIZE, height: UPDATE_INDICATOR_SIZE });
+      : Math.round(harnessBounds.x + anchor.right - (UPDATE_INDICATOR_WIDTH + 6));
+    const y = Math.round(harnessBounds.y + anchor.top + (anchor.height - UPDATE_INDICATOR_HEIGHT) / 2);
+    updateIndicatorView.setBounds({
+      x: Math.max(0, x),
+      y: Math.max(0, y),
+      width: UPDATE_INDICATOR_WIDTH,
+      height: UPDATE_INDICATOR_HEIGHT,
+    });
   }).catch(() => undefined);
 }
 
@@ -616,15 +638,20 @@ async function presentUpdateResult(result: UpdateCheckResult): Promise<void> {
       cancelId: 1,
     });
     if (choice.response === 0) {
-      new Notification({
-        title: t('update.installing.title'),
-        body: t('update.installing.body'),
-      }).show();
-      const install = await service.installHarness(result.harness!);
-      if (install.status === 'installed') {
-        await dialog.showMessageBox({ type: 'info', title: t('update.harnessComplete.title'), message: t('update.harnessComplete.message') });
-      } else {
-        await dialog.showMessageBox({ type: 'error', title: t('update.failed.title'), message: install.error ?? t('update.failed.message') });
+      setUpdateActivity('downloading');
+      notifyUpdateDownloading();
+      try {
+        const install = await service.installHarness(result.harness!);
+        setUpdateActivity('idle');
+        if (install.status === 'installed') {
+          await dialog.showMessageBox({ type: 'info', title: t('update.harnessComplete.title'), message: t('update.harnessComplete.message') });
+        } else {
+          await dialog.showMessageBox({ type: 'error', title: t('update.failed.title'), message: install.error ?? t('update.failed.message') });
+        }
+      } catch (error) {
+        setUpdateActivity('idle');
+        const message = error instanceof Error ? error.message : String(error);
+        await dialog.showMessageBox({ type: 'error', title: t('update.failed.title'), message });
       }
     }
     return;
@@ -643,13 +670,21 @@ async function presentUpdateResult(result: UpdateCheckResult): Promise<void> {
       cancelId: 1,
     });
     if (choice.response === 0) {
-      new Notification({
-        title: t('update.installing.title'),
-        body: t('update.installing.body'),
-      }).show();
-      const install = await service.downloadAndInstall();
-      if (install.status === 'failed') {
-        await dialog.showMessageBox({ type: 'error', title: t('update.failed.title'), message: install.error ?? t('update.failed.message') });
+      setUpdateActivity('downloading');
+      notifyUpdateDownloading();
+      try {
+        const install = await service.downloadAndInstall();
+        if (install.status === 'installed') {
+          setUpdateActivity('installing');
+          notifyUpdateInstalling();
+        } else {
+          setUpdateActivity('idle');
+          await dialog.showMessageBox({ type: 'error', title: t('update.failed.title'), message: install.error ?? t('update.failed.message') });
+        }
+      } catch (error) {
+        setUpdateActivity('idle');
+        const message = error instanceof Error ? error.message : String(error);
+        await dialog.showMessageBox({ type: 'error', title: t('update.failed.title'), message });
       }
     }
     return;
@@ -778,9 +813,18 @@ function openOverlay(): void {
 }
 
 function updateTrayMenu(): void {
-  tray?.setToolTip(t('tray.tooltip'));
+  const activityLabel = updateActivity === 'downloading'
+    ? t('tray.updateDownloading')
+    : updateActivity === 'installing'
+      ? t('tray.updateInstalling')
+      : null;
+  tray?.setToolTip(activityLabel ?? t('tray.tooltip'));
+  const activityItems: Electron.MenuItemConstructorOptions[] = activityLabel
+    ? [{ label: activityLabel, enabled: false }, { type: 'separator' }]
+    : [];
   tray?.setContextMenu(
     Menu.buildFromTemplate([
+      ...activityItems,
       { label: t('tray.show'), click: () => showMainWindowFromTray() },
       { label: t('menu.poolStatus'), click: () => openOverlay() },
       {
@@ -791,6 +835,34 @@ function updateTrayMenu(): void {
       { label: t('menu.quit'), click: () => app.quit() },
     ]),
   );
+}
+
+function setUpdateActivity(activity: UpdateActivity): void {
+  updateActivity = activity;
+  updateTrayMenu();
+}
+
+function notifyUpdateDownloading(): void {
+  try {
+    new Notification({
+      title: t('update.downloading.title'),
+      body: t('update.downloading.body'),
+    }).show();
+  } catch {
+    // The tray tooltip/menu still exposes progress when native notifications
+    // are unavailable (headless sessions, notification policy, or tests).
+  }
+}
+
+function notifyUpdateInstalling(): void {
+  try {
+    new Notification({
+      title: t('update.installing.title'),
+      body: t('update.installing.body'),
+    }).show();
+  } catch {
+    // The updater will still relaunch through electron-updater.
+  }
 }
 
 function createTray(): void {

@@ -22,7 +22,7 @@ function makeFullLayout(base: string, opts: { bundleHasBridge?: boolean } = {}):
   const bundleDir = join(dsh, 'node_modules', '@deepseek-ai', 'dsh-host-directory-picker-native', 'lib');
   mkdirSync(bundleDir, { recursive: true });
   const bundle = hasBridge
-    ? '// bundle\nconst env = process.env.FREECODE_DIALOG_BRIDGE_ENDPOINT;\n'
+    ? '// bundle\nconst env = process.env.FREECODE_DIALOG_BRIDGE_ENDPOINT;\nconst token = process.env.FREECODE_DIALOG_BRIDGE_TOKEN;\nfetch(env, { headers: { \'x-freecode-dialog-token\': token } });\n'
     : '// bundle without bridge\n';
   writeFileSync(join(bundleDir, 'index.js'), bundle);
   writeFileSync(join(base, 'runtime-manifest.json'), '{"version":"0.0.0","cli":"dsh/apps/cli/lib/bin.js"}');
@@ -70,6 +70,22 @@ describe('verifyHarnessLayout', () => {
     const result = verifyHarnessLayout({ resourcesDir: root, platform: 'win32' });
     expect(result.ok).toBe(false);
     expect(result.warnings.some(w => w.includes('Electron dialog bridge'))).toBe(true);
+  });
+
+  it('rejects a present-but-empty runtime manifest', () => {
+    makeFullLayout(root);
+    writeFileSync(join(root, 'runtime-manifest.json'), '');
+    const result = verifyHarnessLayout({ resourcesDir: root, platform: 'win32' });
+    expect(result.ok).toBe(false);
+    expect(result.warnings.some(w => w.includes('runtime manifest is empty'))).toBe(true);
+  });
+
+  it('rejects a runtime manifest without the CLI contract', () => {
+    makeFullLayout(root);
+    writeFileSync(join(root, 'runtime-manifest.json'), '{"version":"0.5.0"}');
+    const result = verifyHarnessLayout({ resourcesDir: root, platform: 'win32' });
+    expect(result.ok).toBe(false);
+    expect(result.warnings.some(w => w.includes('valid cli'))).toBe(true);
   });
 
   it('linux does not require the win32 opencode2api binary', () => {

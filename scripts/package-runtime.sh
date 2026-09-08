@@ -20,10 +20,15 @@ STAGE="$STAGE_ROOT/dsh"
 
 # Git Bash can report "File too large" while recursively removing generated
 # trees on Windows-mounted volumes, even when the individual files are tiny.
-# Use Node's native filesystem implementation for those cleanup paths so the
-# packaging gate is stable on Windows and remains portable on other hosts.
+# Use Node's native filesystem implementation for those cleanup paths on
+# Windows. In Linux/WSL, native rm is materially faster across /mnt/* and all
+# callers pass exact generated directories (never a workspace root).
 remove_tree() {
-  node -e "const fs=require('node:fs'); for (const path of process.argv.slice(1)) fs.rmSync(path,{recursive:true,force:true,maxRetries:5,retryDelay:200})" "$@"
+  if [[ "$(uname -s)" == Linux* ]]; then
+    rm -rf -- "$@"
+  else
+    node -e "const fs=require('node:fs'); for (const path of process.argv.slice(1)) fs.rmSync(path,{recursive:true,force:true,maxRetries:5,retryDelay:200})" "$@"
+  fi
 }
 
 cleanup() { remove_tree "$STAGE_ROOT"; }
@@ -40,7 +45,31 @@ if [[ ! -f "$GEMINI_WEB2API/gemini_web2api/__main__.py" ]]; then
 fi
 
 echo "package-runtime: installing upstream build closure"
+# node_modules is generated state and its workspace links are not portable
+# between Windows and WSL. A stale Vite link is especially dangerous because
+# pnpm can report the lockfile as up to date while leaving a broken link from
+# the other platform's virtual store. The marker makes the boundary explicit:
+# changing OS/CPU always removes only the generated upstream dependency trees
+# before reinstalling, even when the stale link happens to look resolvable.
+INSTALL_PLATFORM="${DSH_TARGET_OS:-$(node -p 'process.platform')}:${DSH_TARGET_CPU:-$(node -p 'process.arch')}"
+PLATFORM_MARKER="$VENDOR/node_modules/.freecode-install-platform"
+VITE_ROOT_ENTRY="$VENDOR/node_modules/vite/bin/vite.js"
+VITE_WORKSPACE_ENTRY="$VENDOR/apps/web/node_modules/vite/bin/vite.js"
+if [[ ! -f "$PLATFORM_MARKER" ]] || ! grep -Fxq "$INSTALL_PLATFORM" "$PLATFORM_MARKER"; then
+  echo "package-runtime: dependency platform changed or is unknown ($INSTALL_PLATFORM); recreating upstream node_modules"
+  remove_tree "$VENDOR/node_modules" "$VENDOR/apps/web/node_modules"
+elif [[ -L "$VENDOR/apps/web/node_modules/vite" \
+  && ! -e "$VITE_WORKSPACE_ENTRY" \
+  && ! -e "$VITE_ROOT_ENTRY" ]]; then
+  echo "package-runtime: stale cross-platform node_modules links; recreating upstream node_modules"
+  remove_tree "$VENDOR/node_modules" "$VENDOR/apps/web/node_modules"
+fi
 pnpm --dir "$VENDOR" install --frozen-lockfile --node-linker=hoisted
+printf '%s\n' "$INSTALL_PLATFORM" > "$PLATFORM_MARKER"
+if [[ ! -f "$VITE_ROOT_ENTRY" && ! -f "$VITE_WORKSPACE_ENTRY" ]]; then
+  echo "package-runtime: Vite entry missing after install: $VITE_ROOT_ENTRY (or $VITE_WORKSPACE_ENTRY)" >&2
+  exit 2
+fi
 node "$ROOT/scripts/link-upstream-workspace-packages.mjs"
 
 echo "package-runtime: building upstream libraries and web app"

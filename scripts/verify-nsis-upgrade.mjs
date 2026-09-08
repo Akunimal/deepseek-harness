@@ -1,17 +1,19 @@
 #!/usr/bin/env node
 /**
- * Zero-trust upgrade smoke: install the known-good 0.2.4 setup, place a
+ * Zero-trust upgrade smoke: install the last-known-good 0.4.3 setup, place a
  * stale payload marker and a user-data marker, then update that same install
  * with the current candidate setup. The stale marker must disappear while the
  * user-data marker must survive.
  */
 
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { stopInstalledProcesses, verifyInstalledRuntime } from './verify-installed-runtime.mjs';
+import { removeTestInstall } from './remove-test-install.mjs';
+import { stopInstalledProcesses, stopInstalledProcessesReferencing, verifyInstalledRuntime } from './verify-installed-runtime.mjs';
+import { cleanupInstalledShortcuts, verifyInstalledShortcuts } from './verify-nsis-shortcuts.mjs';
 
 if (process.platform !== 'win32') {
   console.log('verify-nsis-upgrade: skipped (non-Windows host).');
@@ -23,16 +25,17 @@ const RELEASE_DIR = resolve(REPO_ROOT, 'apps/shell/release');
 const rootPackage = JSON.parse(readFileSync(join(REPO_ROOT, 'package.json'), 'utf8'));
 const NEW_VERSION = rootPackage.version;
 const NEW_SETUP = join(RELEASE_DIR, `FreeCode-DeepSeek-Harness-${NEW_VERSION}-win-x64-setup.exe`);
-const OLD_NAME = 'FreeCode-DeepSeek-Harness-0.2.4-win-x64-setup.exe';
+const STABLE_VERSION = '0.4.3';
+const OLD_NAME = `FreeCode-DeepSeek-Harness-${STABLE_VERSION}-win-x64-setup.exe`;
 const oldCandidates = [
   join(RELEASE_DIR, OLD_NAME),
-  ...[' _backup-v0.2.4-final', ' _backup-0.2.4-r2', ' _backup-0.2.4-pre-fix']
+  ...[` _backup-v${STABLE_VERSION}`, ` _backup-${STABLE_VERSION}`]
     .map((name) => join(RELEASE_DIR, name.trim(), OLD_NAME)),
 ];
 const OLD_SETUP = oldCandidates.find((candidate) => existsSync(candidate));
 
 if (!OLD_SETUP || !existsSync(NEW_SETUP)) {
-  console.error(`verify-nsis-upgrade: 0.2.4 and ${NEW_VERSION} setup files are required.`);
+  console.error(`verify-nsis-upgrade: ${STABLE_VERSION} and ${NEW_VERSION} setup files are required.`);
   process.exit(2);
 }
 
@@ -85,7 +88,7 @@ const runSetup = async (setup, label, isComplete = layoutIsPopulated) => {
   });
   let spawnError;
   child.on('error', (error) => { spawnError = error; });
-  // The historical 0.2.4 payload is materially larger than the current
+  // The historical stable payload is materially larger than the current
   // candidate and can take over 15 minutes to expand on a cold Windows
   // profile or slower temp volume. Match the clean-install smoke budget so
   // the upgrade gate does not misclassify healthy extraction as a timeout.
@@ -128,10 +131,10 @@ const assertPopulated = (label) => {
 };
 
 try {
-  await runSetup(OLD_SETUP, '0.2.4');
-  assertPopulated('0.2.4');
+  await runSetup(OLD_SETUP, STABLE_VERSION);
+  assertPopulated(STABLE_VERSION);
 
-  const staleMarker = join(dsh(), 'packages', '.stale-0.2.4-payload-marker');
+  const staleMarker = join(dsh(), 'packages', `.stale-${STABLE_VERSION}-payload-marker`);
   const userDataMarker = join(installDir, 'user-data', 'must-survive-upgrade.txt');
   writeFileSync(staleMarker, 'old payload\n');
   mkdirSync(join(installDir, 'user-data'), { recursive: true });
@@ -141,10 +144,11 @@ try {
   assertPopulated(NEW_VERSION);
 
   await verifyInstalledRuntime({ installDir, label: `${NEW_VERSION} upgrade` });
+  verifyInstalledShortcuts({ installDir, label: `${NEW_VERSION} upgrade shortcuts` });
 
-  if (existsSync(staleMarker)) throw new Error('stale 0.2.4 payload marker survived upgrade');
+  if (existsSync(staleMarker)) throw new Error(`stale ${STABLE_VERSION} payload marker survived upgrade`);
   if (!existsSync(userDataMarker)) throw new Error('user-data marker was deleted by upgrade');
-  console.log(`verify-nsis-upgrade: 0.2.4 -> ${NEW_VERSION} passed; payload replaced, runtime booted, and user data preserved.`);
+  console.log(`verify-nsis-upgrade: ${STABLE_VERSION} -> ${NEW_VERSION} passed; payload replaced, runtime booted, and user data preserved.`);
 } catch (error) {
   console.error(`verify-nsis-upgrade: ${error.message}`);
   process.exitCode = 1;
@@ -158,7 +162,19 @@ try {
       process.exitCode = 1;
     }
   }
-  try { rmSync(installDir, { recursive: true, force: true }); } catch (error) {
+  try { cleanupInstalledShortcuts({ installDir }); } catch (error) {
+    console.error(`verify-nsis-upgrade: failed to remove temporary shortcuts: ${error.message}`);
+    process.exitCode = 1;
+  }
+  try {
+    await removeTestInstall(installDir, {
+      label: 'verify-nsis-upgrade test install',
+      beforeAttempt: () => {
+        try { stopInstalledProcesses(installDir); } catch { /* cleanup retries still apply */ }
+        try { stopInstalledProcessesReferencing(installDir); } catch { /* cleanup retries still apply */ }
+      },
+    });
+  } catch (error) {
     console.error(`verify-nsis-upgrade: failed to remove test install: ${error.message}`);
     process.exitCode = 1;
   }

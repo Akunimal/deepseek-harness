@@ -36,10 +36,17 @@ const strings = {
   // Tray
   'tray.show': { es: 'Mostrar', en: 'Show' },
   'tray.tooltip': { es: 'FreeCode DeepSeek Harness', en: 'FreeCode DeepSeek Harness' },
+  'tray.updateDownloading': { es: 'Descargando actualización…', en: 'Downloading update…' },
+  'tray.updateInstalling': { es: 'Instalando actualización…', en: 'Installing update…' },
 
-  // Update installing notification
+  // Update progress notifications
+  'update.downloading.title': { es: 'FreeCode está descargando una actualización', en: 'FreeCode is downloading an update' },
+  'update.downloading.body': {
+    es: 'La descarga está en curso. El estado también se muestra en el menú de la bandeja.',
+    en: 'The download is in progress. The tray menu also shows the current status.',
+  },
   'update.installing.title': { es: 'FreeCode se está actualizando', en: 'FreeCode is updating' },
-  'update.installing.body': { es: 'La aplicación se reiniciará pronto…', en: 'The application will restart shortly…' },
+  'update.installing.body': { es: 'La descarga terminó; la aplicación se reiniciará para instalarla.', en: 'The download finished; the application will restart to install it.' },
 
   // Notifications
   'notify.ready.title': { es: 'Harness listo', en: 'Harness ready' },
@@ -195,8 +202,8 @@ const strings = {
   // Startup preflight failure — installer bug or corrupted install
   'preflight.title': { es: 'Instalación incompleta', en: 'Install incomplete' },
   'preflight.reinstallHint': {
-    es: 'Reinstalá FreeCode desde el instalador oficial (v0.2.4 o posterior).',
-    en: 'Reinstall FreeCode from the official installer (v0.2.4 or later).',
+    es: 'Reinstalá FreeCode desde el instalador oficial (v0.4.3, la última versión estable, o posterior).',
+    en: 'Reinstall FreeCode from the official installer (v0.4.3, the last stable release, or later).',
   },
 
   // Version label
@@ -236,6 +243,10 @@ const zhStrings = {
   'update.indicator': '发现更新',
   'tray.show': '显示',
   'tray.tooltip': 'FreeCode DeepSeek Harness',
+  'tray.updateDownloading': '正在下载更新…',
+  'tray.updateInstalling': '正在安装更新…',
+  'update.downloading.title': 'FreeCode 正在下载更新',
+  'update.downloading.body': '下载正在进行中。托盘菜单也会显示当前状态。',
   'notify.ready.title': 'Harness 已就绪',
   'status.catalog.down.title': '模型目录不可用',
   'status.catalog.down.message': '无法访问模型目录。已保留上一次有效选择，并会自动重试。',
@@ -299,11 +310,11 @@ const zhStrings = {
   'tor.auto.keep': '保持启用',
   'tor.auto.disable': '禁用',
   'preflight.title': '安装不完整',
-  'preflight.reinstallHint': '请从官方安装程序重新安装 FreeCode（v0.2.4 或更高版本）。',
+  'preflight.reinstallHint': '请从官方安装程序重新安装 FreeCode（v0.4.3，最后一个稳定版本，或更高版本）。',
   'version.new': '新版本',
   'version.unknown': '未知',
   'update.installing.title': 'FreeCode 正在更新',
-  'update.installing.body': '应用程序即将重启…',
+  'update.installing.body': '下载已完成；应用程序即将重启以完成安装。',
 } as const satisfies Record<I18nKey, string>;
 
 let currentLocale: Locale = 'en';

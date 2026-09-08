@@ -63,6 +63,54 @@ if (GUARDED_PACKAGES.length === 0) {
   process.exit(2);
 }
 
+const DIRECTORY_PICKER_PACKAGE = 'vendor/deepseek-harness/packages/host/directory-picker-native';
+const DIRECTORY_PICKER_BRIDGE_MARKERS = [
+  'FREECODE_DIALOG_BRIDGE_ENDPOINT',
+  'FREECODE_DIALOG_BRIDGE_TOKEN',
+];
+
+/**
+ * The Electron shell has a deliberate cross-package contract with the native
+ * directory picker. A source hash can be made to match a stale bundle after
+ * an upstream sync (or an incorrect `--write`), so freshness alone is not
+ * enough: require the bridge contract in both source and shipped JavaScript.
+ */
+function verifyDirectoryPickerBridgeContract() {
+  const pkgDir = resolve(REPO, DIRECTORY_PICKER_PACKAGE);
+  const sourcePath = join(pkgDir, 'src', 'native-picker.ts');
+  const bundlePath = join(pkgDir, 'lib', 'index.js');
+  let failures = 0;
+
+  if (!existsSync(sourcePath)) {
+    console.error(`verify-vendor-bundles-fresh: missing bridge source ${relative(REPO, sourcePath)}`);
+    return 1;
+  }
+  const source = readFileSync(sourcePath, 'utf8');
+  for (const marker of DIRECTORY_PICKER_BRIDGE_MARKERS) {
+    if (!source.includes(marker)) {
+      console.error(`verify-vendor-bundles-fresh: directory-picker source lost required bridge marker ${marker}`);
+      failures++;
+    }
+  }
+
+  if (!existsSync(bundlePath)) {
+    console.error(`verify-vendor-bundles-fresh: missing directory-picker bundle ${relative(REPO, bundlePath)}`);
+    return failures + 1;
+  }
+  const bundle = readFileSync(bundlePath, 'utf8');
+  for (const marker of DIRECTORY_PICKER_BRIDGE_MARKERS) {
+    if (!bundle.includes(marker)) {
+      console.error(`verify-vendor-bundles-fresh: directory-picker bundle lacks required bridge marker ${marker}`);
+      failures++;
+    }
+  }
+  if (!bundle.includes('fetch(') || !bundle.includes('x-freecode-dialog-token')) {
+    console.error('verify-vendor-bundles-fresh: directory-picker bundle lacks the Electron bridge request path');
+    failures++;
+  }
+  return failures;
+}
+
 /** Where the hash lockfile lives. Kept OUTSIDE the vendored subtree because
  * the vendor's own `.gitignore` excludes `lib/`; a lockfile inside `lib/`
  * would never be tracked by git and CI could not verify against it. */
@@ -109,6 +157,7 @@ function hasCompiledJavaScript(dir) {
 let stale = 0;
 let missing = 0;
 let ok = 0;
+const contractFailures = verifyDirectoryPickerBridgeContract();
 
 const lockData = existsSync(LOCK_FILE)
   ? JSON.parse(readFileSync(LOCK_FILE, 'utf8'))
@@ -147,6 +196,8 @@ for (const rel of GUARDED_PACKAGES) {
   }
   ok++;
 }
+
+if (contractFailures > 0) process.exit(1);
 
 if (WRITE_MODE) {
   mkdirSync(dirname(LOCK_FILE), { recursive: true });

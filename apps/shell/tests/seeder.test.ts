@@ -40,11 +40,11 @@ describe('provider-seeder', () => {
       { id: 'gemini-3.7-flash', reasoningEfforts: false },
       { id: 'gemini-3.6-flash', reasoningEfforts: false },
       { id: 'gemini-3.5-flash', reasoningEfforts: false },
-      { id: 'gemini-3.5-flash-thinking', reasoningEfforts: false },
+      { id: 'gemini-3.5-flash-thinking', reasoningEfforts: { off: null, low: 'low', high: 'high' } },
       { id: 'gemini-3.1-pro', reasoningEfforts: false },
       { id: 'gemini-3.1-pro-enhanced', reasoningEfforts: false },
       { id: 'gemini-auto', reasoningEfforts: false },
-      { id: 'gemini-3.5-flash-thinking-lite', reasoningEfforts: false },
+      { id: 'gemini-3.5-flash-thinking-lite', reasoningEfforts: { off: null, low: 'low', high: 'high' } },
       { id: 'gemini-flash-lite', reasoningEfforts: false },
     ]);
     // Provider insertion order is the selector order after the built-in pool.

@@ -37,12 +37,30 @@ for (const rootDir of roots) walk(rootDir);
 
 const scopeDir = path.join(vendor, 'node_modules', '@deepseek-ai');
 fs.mkdirSync(scopeDir, { recursive: true });
+
+function removePreviousLink(destination) {
+  try {
+    const stat = fs.lstatSync(destination, { throwIfNoEntry: false });
+    if (stat) fs.rmSync(destination, { recursive: true, force: true });
+  } catch (error) {
+    const code = error && typeof error === 'object' && 'code' in error ? error.code : undefined;
+    if (code === 'EACCES' || code === 'EPERM') {
+      throw new Error([
+        `Cannot replace upstream workspace link: ${destination}`,
+        'vendor/deepseek-harness/node_modules was created by another OS',
+        'and is not safely shareable between Windows and WSL.',
+        'Remove only that generated node_modules link scope from the same OS,',
+        'then rerun the command.',
+      ].join(' '));
+    }
+    throw error;
+  }
+}
+
 for (const [name, packageDir] of packageDirs) {
   const packageName = name.slice('@deepseek-ai/'.length);
   const destination = path.join(scopeDir, packageName);
-  if (fs.existsSync(destination) || fs.lstatSync(destination, { throwIfNoEntry: false })) {
-    fs.rmSync(destination, { recursive: true, force: true });
-  }
+  removePreviousLink(destination);
   fs.symlinkSync(packageDir, destination, process.platform === 'win32' ? 'junction' : 'dir');
 }
 

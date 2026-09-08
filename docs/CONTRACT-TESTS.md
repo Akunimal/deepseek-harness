@@ -15,7 +15,7 @@ pnpm test:contract
 1. `dsh web --help` still exposes `--port` and `--host`.
 2. `dsh web` still emits a loopback readiness URL.
 3. The `llm-pi-ai` README still documents `apiKeyEnv`, `baseURL`, and `openai-completions` provider fields.
-4. `POST /api/llm.providers` still accepts the client-request RPC envelope and reports the seeded provider as active and declared.
+4. `POST /api` still accepts the `llm/listConfigurableProviders` client-request RPC envelope and reports the seeded provider with its current declared configuration shape.
 5. The load balancer serves `GET /v1/models` as `{ data: [{ id }] }`.
 6. The load balancer preserves SSE `data:` frames from `POST /v1/chat/completions`.
 7. The OpenCode worker binary still accepts `-port`, `-password`, and `-config`.
@@ -36,6 +36,16 @@ the equivalent local checks pass and the user explicitly authorizes the remote
 operation.
 
 The required preflight is `pnpm test`, `pnpm test:contract`, `pnpm typecheck`,
-and the relevant build/package check for the changed surface. A failing local
-preflight blocks publication; it is not a reason to use a remote workflow as a
-diagnostic run.
+the relevant build/package check for the changed surface, and
+`pnpm verify:linux-appimage` from Linux/WSL for the Linux artifact. The Windows
+release gate additionally upgrades an isolated install from the last-known-good
+`v0.4.3` artifact and invokes the Linux AppImage gate through WSL. The
+AppImage gate reads manifest, bridge, worker, tray, app-version, and update
+metadata entries directly from SquashFS; it does not trust WSL's convenience
+extraction output. A failing local preflight blocks publication; it is not a
+reason to use a remote workflow as a diagnostic run.
+
+The Windows NSIS smokes also inspect the actual Start Menu and Desktop `.lnk`
+files. Each link must target the installed executable and use the install
+directory as `WorkingDirectory`/`Start in`; links proven to point at the exact
+temporary smoke directory are removed during cleanup.

@@ -7,6 +7,7 @@ export type PluginsSettingsLocaleKey =
   | 'save' | 'saving' | 'discard' | 'unsaved' | 'saveFailed' | 'invalidNumber'
   | 'bashTitle' | 'bashDescription' | 'bashTimeoutMs' | 'bashTimeoutMsHint'
   | 'bashMaxOutputBytes' | 'bashMaxOutputBytesHint'
+  | 'bashRtk' | 'bashRtkHint' | 'bashCaveman' | 'bashCavemanHint'
   | 'agentLoopTitle' | 'agentLoopDescription' | 'agentLoopMaxParallel' | 'agentLoopMaxParallelHint'
   | 'webSearchTitle' | 'webSearchDescription'
   | 'webSearchApiKey' | 'webSearchApiKeyHint' | 'webSearchApiKeySet' | 'webSearchApiKeyUnset'
@@ -43,6 +44,10 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   bashTimeoutMsHint: 'How long one command may run before it is terminated.',
   bashMaxOutputBytes: 'Output cap per stream (bytes)',
   bashMaxOutputBytesHint: 'Output beyond this spills to a temporary file rather than being lost.',
+  bashRtk: 'Use RTK token compression',
+  bashRtkHint: 'Uses an already-installed RTK for eligible simple CLI commands. Missing RTK changes nothing.',
+  bashCaveman: 'Use Caveman context compression',
+  bashCavemanHint: 'Compresses eligible command output. Requires Caveman installed separately; missing Caveman changes nothing.',
   agentLoopTitle: 'Agent loop',
   agentLoopDescription: 'How the agent dispatches tool calls.',
   agentLoopMaxParallel: 'Parallel tool calls',
@@ -99,6 +104,10 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   bashTimeoutMsHint: '单条命令允许运行多久，超时即终止。',
   bashMaxOutputBytes: '单流输出上限（字节）',
   bashMaxOutputBytesHint: '超出部分会转存到临时文件，而不是被丢弃。',
+  bashRtk: '使用 RTK 压缩令牌',
+  bashRtkHint: '对符合条件的简单 CLI 命令使用已安装的 RTK。未安装 RTK 时不会改变任何行为。',
+  bashCaveman: '使用 Caveman 上下文压缩',
+  bashCavemanHint: '压缩符合条件的命令输出。需要单独安装 Caveman；未安装时不会改变任何行为。',
   agentLoopTitle: 'Agent 循环',
   agentLoopDescription: 'Agent 如何派发工具调用。',
   agentLoopMaxParallel: '并行工具调用数',

@@ -46,10 +46,21 @@ describe('bash settings section', () => {
   it('resolves the user layer over the composition entry', async () => {
     const bench = await boot()
     expect(bench.bash.config.timeoutMs).toBe(60_000)
+    expect(bench.bash.config.rtk).toBe(true)
+    expect(bench.bash.config.caveman).toBe(false)
 
     await bench.ctx.settings.update(SHELL_SETTINGS_NAMESPACE, { timeoutMs: 5_000 })
 
     expect(bench.bash.config.timeoutMs).toBe(5_000)
+    await bench.ctx.fiber.dispose()
+  })
+
+  it('applies the RTK and Caveman toggles from the live settings section', async () => {
+    const bench = await boot()
+    await bench.ctx.settings.update(SHELL_SETTINGS_NAMESPACE, { rtk: false, caveman: true })
+
+    expect(bench.bash.config.rtk).toBe(false)
+    expect(bench.bash.config.caveman).toBe(true)
     await bench.ctx.fiber.dispose()
   })
 

@@ -35,25 +35,30 @@
   ClearErrors
 !macroend
 
-; electron-builder intentionally preserves shortcuts during upgrades when the
-; registry says KeepShortcuts=true. That state is not proof that either .lnk
-; still exists: users, cleanup tools, or a prior broken installer may have
-; removed it. Recreate only missing links after extraction so an upgrade cannot
-; leave a registered, working install invisible from Start/Desktop.
+; electron-builder can preserve shortcuts during upgrades when the registry
+; says KeepShortcuts=true. That state is not proof that either .lnk points to
+; the current executable or has a valid "Start in" directory: a prior broken
+; installer may have left an empty working directory behind. Recreate both
+; links after extraction so every install/upgrade repairs target and working
+; directory deterministically.
 !macro customInstall
+  ; CreateShortCut stores $OUTDIR as the shortcut's "Start in" directory.
+  ; customInstall runs after electron-builder has extracted the payload, and
+  ; its last extraction directory is not a stable contract (it may be empty or
+  ; point at a temporary NSIS directory). Pin it to the actual app directory
+  ; before repairing/creating either shortcut so launching from Start/Desktop
+  ; has the same working directory as the packaged executable.
+  SetOutPath "$INSTDIR"
+
   !ifdef MENU_FILENAME
     CreateDirectory "$SMPROGRAMS\${MENU_FILENAME}"
   !endif
 
-  ${ifNot} ${FileExists} "$newStartMenuLink"
-    CreateShortCut "$newStartMenuLink" "$appExe" "" "$appExe" 0 "" "" "${APP_DESCRIPTION}"
-    ClearErrors
-    WinShell::SetLnkAUMI "$newStartMenuLink" "${APP_ID}"
-  ${endIf}
+  CreateShortCut "$newStartMenuLink" "$appExe" "" "$appExe" 0 "" "" "${APP_DESCRIPTION}"
+  ClearErrors
+  WinShell::SetLnkAUMI "$newStartMenuLink" "${APP_ID}"
 
-  ${ifNot} ${FileExists} "$newDesktopLink"
-    CreateShortCut "$newDesktopLink" "$appExe" "" "$appExe" 0 "" "" "${APP_DESCRIPTION}"
-    ClearErrors
-    WinShell::SetLnkAUMI "$newDesktopLink" "${APP_ID}"
-  ${endIf}
+  CreateShortCut "$newDesktopLink" "$appExe" "" "$appExe" 0 "" "" "${APP_DESCRIPTION}"
+  ClearErrors
+  WinShell::SetLnkAUMI "$newDesktopLink" "${APP_ID}"
 !macroend

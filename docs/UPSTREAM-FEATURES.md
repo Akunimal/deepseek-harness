@@ -71,7 +71,44 @@ This is the exhaustive inventory of upstream surfaces shipped through the bundle
 
 The following list is taken from each package's own `package.json` description and includes its source path. Some entries are implementation seams rather than visible buttons, but they are still part of the shipped harness closure and are documented here so their purpose is not hidden.
 
-+- **@deepseek-ai/dsh-acp** (packages/acp/acp) — Automation-only Agent Client Protocol server for driving DeepSeek Harness agents over JSON-RPC stdio
+- **@deepseek-ai/dsh-acp** (packages/acp/acp) — Automation-only Agent Client Protocol server for driving DeepSeek Harness agents over JSON-RPC stdio
+- **@deepseek-ai/dsh-acp-app** (packages/bundle/acp-app) — The dsh ACP profile bundle: automation-only JSON-RPC stdio and process lifecycle over dsh-base
+- **@deepseek-ai/dsh-api-session-controller** (packages/api/session-controller) — Session Remote commands, cold reads, and live control transport
+- **@deepseek-ai/dsh-api-settings-controller** (packages/api/settings-controller) — Remote owner for the configuration surfaces over the settings-domain seams
+- **@deepseek-ai/dsh-api-workspace-controller** (packages/api/workspace-controller) — Workspace Remote commands and reconnect-safe state transport
+- **@deepseek-ai/dsh-client-file-upload** (packages/client/file-upload) — Agent-scoped browser file upload, streaming intake, and staged receipt service
+- **@deepseek-ai/dsh-client-store** (packages/client/store) — React-free observable and snapshot-store contracts with the shared Zustand/Immer engine
+- **@deepseek-ai/dsh-client-ui-approval** (packages/client/ui-approval) — Approval composer takeover over the scoped Remote Event waterfall
+- **@deepseek-ai/dsh-client-ui-chat** (packages/client/ui-chat) — Chat Conversation target, node definitions, renderers, and details surface
+- **@deepseek-ai/dsh-client-ui-schedule** (packages/client/ui-schedule) — Read-only active Schedule catalog in the Web Session header
+- **@deepseek-ai/dsh-client-ui-session** (packages/client/ui-session) — Session Controller adapter for React and session-scoped slots
+- **@deepseek-ai/dsh-deepseek-llm-api-extensions** (packages/llm/deepseek-llm-api-extensions) — Additive request-field registry for the official DeepSeek LLM API adapter
+- **@deepseek-ai/dsh-deque** (packages/util/deque) — Zero-dependency circular deque with amortized constant-time end operations and bounded vacant storage
+- **@deepseek-ai/dsh-experimental-agent-team-profile** (packages/experimental/agent-team-profile) — Private profile bundle enabling Agent Teams over dsh-base
+- **@deepseek-ai/dsh-experimental-agent-team-web-profile** (packages/experimental/agent-team-web-profile) — Private Web profile layer for Agent Teams Remote and UI plugins
+- **@deepseek-ai/dsh-experimental-client-ui-agent-team** (packages/experimental/client-ui-agent-team) — Web Agent Teams roster, task board, and teammate navigation
+- **@deepseek-ai/dsh-experimental-code-runtime-python** (packages/experimental/code-runtime-python) — CPython subprocess implementation of the DeepSeek Harness code-execution seam
+- **@deepseek-ai/dsh-experimental-inspector** (packages/experimental/inspector) — Experimental cross-realm CDP hub for Host debugging and Client Runtime inspection
+- **@deepseek-ai/dsh-experimental-webworker-packer** (packages/experimental/webworker-packer) — Build-time packer for the browser runtime's base VFS image and ordered data-overlay archives
+- **@deepseek-ai/dsh-experimental-webworker-runtime** (packages/experimental/webworker-runtime) — Browser-only harness runtime: in-memory VFS, module transform and loader, postMessage tunnel, and dedicated Web Worker assembly
+- **@deepseek-ai/dsh-http-proxy** (packages/util/http-proxy) — Process-wide outbound HTTP proxy policy resolved from the launch environment and installed as undici's global dispatcher
+- **@deepseek-ai/dsh-plugin-package-inventory-deepseek** (packages/llm/plugin-package-inventory-deepseek) — Active Loader-backed plugin package inventory for official DeepSeek LLM API requests
+- **@deepseek-ai/dsh-sdk-app** (packages/bundle/sdk-app) — The dsh SDK profile bundle: stdio JSON-RPC serving and process lifecycle over dsh-base
+- **@deepseek-ai/dsh-sdk-minimal** (packages/bundle/sdk-minimal) — Standalone minimal SDK profile bundle with JSON-RPC, one DeepSeek adapter, persistent shell, editor, and JSONL sessions
+- **@deepseek-ai/dsh-session-format-catalog** (packages/session/session-format-catalog) — Build-static first-party Session format codec and migration catalog
+- **@deepseek-ai/dsh-session-format-v0-to-v1** (packages/session/session-format-v0-to-v1) — Frozen released-v0 Session codec and identity migration to v1
+- **@deepseek-ai/dsh-session-format-v1-to-v2** (packages/session/session-format-v1-to-v2) — Frozen released-v1 Session codec and assistant-stream migration to v2
+- **@deepseek-ai/dsh-session-format** (packages/session/session-format) — Pure adjacent whole-artifact Session format migration machinery
+- **@deepseek-ai/dsh-session-log-deepseek** (packages/session/session-log-deepseek) — Incremental lossless session-log request extension for the official DeepSeek LLM API
+- **@deepseek-ai/dsh-session-snapshot** (packages/test-support/session-snapshot) — Session-log snapshot core with ACP protocol adapter, expected-output normalization, and fixture invariants
+- **@deepseek-ai/dsh-session-turn-outline** (packages/session/session-turn-outline) — Whole-log turn outline projection (`turnOutline`) for the DeepSeek Harness
+- **@deepseek-ai/dsh-util-crypto** (packages/util/crypto) — Zero-dependency browser-safe UUID and byte-encoding helpers
+- **@deepseek-ai/dsh-util-time** (packages/util/time) — Zero-dependency time vocabulary shared by wire boundaries
+- **@deepseek-ai/dsh-util-values** (packages/util/values) — Duplicate-install-safe value primitives for the DeepSeek Harness
+- **@deepseek-ai/dsh-util-workspace-path** (packages/util/workspace-path) — Browser-safe Workspace path and display helpers
+- **@deepseek-ai/dsh-webhook-github** (packages/webhook/webhook-github) — Signed GitHub HTTP webhook adapter for the DeepSeek Harness webhook runtime
+- **@deepseek-ai/dsh-webhook** (packages/webhook/webhook) — Fire-and-forget webhook rule runtime that creates Workspace-backed DeepSeek Harness Sessions
+- **@deepseek-ai/dsh-win32-process** (packages/subprocess/win32-process) — Low-level Win32 process, stdio, and Job Object primitives for the DeepSeek Harness Windows sandbox
 - **@deepseek-ai/dsh-api-gateway** (packages/api/gateway) — Typert Remote Host dispatcher and Client API endpoint
 - **@deepseek-ai/dsh-api-remotes** (packages/api/remotes) — Remote BFF assembly and Host Agent/Session lookup policy
 - **@deepseek-ai/dsh-attachment** (packages/attachment/attachment) — Durable immutable attachment storage seam for the DeepSeek Harness

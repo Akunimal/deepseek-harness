@@ -31,8 +31,8 @@ describe('release and runtime packaging contracts', () => {
     expect(releaseGate).toContain("run('all workspace contract tests', ['test:contract'])");
     expect(releaseGate).toContain("run('all workspace typechecks', ['typecheck'])");
     expect(releaseGate).toContain("run('fresh NSIS install and installed-runtime smoke'");
-    expect(releaseGate).toContain("run('0.2.4 to candidate upgrade and installed-runtime smoke'");
-    expect(rootPackage.version).toBe('0.3.2');
+    expect(releaseGate).toContain("run('0.4.3 to candidate upgrade and installed-runtime smoke'");
+    expect(rootPackage.version).toBe('0.5.0');
     expect(shellPackageJson.version).toBe(rootPackage.version);
   });
 
@@ -97,6 +97,7 @@ describe('release and runtime packaging contracts', () => {
   it('keeps the FreeCode browser, update indicator, and naming contracts aligned', () => {
     const browser = readFileSync(join(ROOT, 'apps/shell/src/main/embedded-browser.ts'), 'utf8');
     const shell = readFileSync(join(ROOT, 'apps/shell/src/main/index.ts'), 'utf8');
+    const updater = readFileSync(join(ROOT, 'apps/shell/src/main/updater.ts'), 'utf8');
     const i18n = readFileSync(join(ROOT, 'apps/shell/src/main/i18n.ts'), 'utf8');
     const browserTool = readFileSync(join(ROOT, 'vendor/deepseek-harness/packages/web/tool-web/src/browser.ts'), 'utf8');
     const sidebar = readFileSync(join(ROOT, 'vendor/deepseek-harness/packages/client/ui-sidebar/src/client/SidebarRoot.tsx'), 'utf8');
@@ -116,6 +117,7 @@ describe('release and runtime packaging contracts', () => {
     expect(browserTool).toContain("'new_tab'");
     expect(browserTool).toContain('computer_use');
     expect(sidebar).toContain('fallbackBrandName}>FreeCode');
+    expect(sidebar).toContain('localBuildTitle}>FreeCode');
     expect(shell).toContain('setInterval(() => void checkForUpdates()');
     expect(shell).toContain('freecode://updates/open');
     expect(shell).toContain("document.querySelector('button[aria-haspopup=\"dialog\"]')");
@@ -123,11 +125,23 @@ describe('release and runtime packaging contracts', () => {
     expect(shell).toContain('isNewerVersion(app.getVersion(), result?.info?.version)');
     expect(shell).toContain("t('menu.aboutMessage', app.getVersion())");
     expect(i18n).toContain('Version $1');
-    expect(shell).toContain('border-radius:50%');
+    const indicatorStart = shell.indexOf('function renderUpdateIndicatorHtml');
+    const indicatorEnd = shell.indexOf('function updateUpdateIndicatorBounds', indicatorStart);
+    const indicator = shell.slice(indicatorStart, indicatorEnd);
+    expect(indicator).toContain('width:34px;height:34px');
+    expect(indicator).toContain('border-radius:999px');
+    expect(indicator).toContain('<button type="button"');
+    expect(indicator).toContain('rotate(180 8 8)');
+    expect(shell).toContain('UPDATE_INDICATOR_WIDTH');
+    expect(updater).toContain('downloadUpdate; refusing to install');
+    expect(shell).toContain("setUpdateActivity('downloading')");
+    expect(shell).toContain("t('tray.updateDownloading')");
+    expect(shell).toContain('notifyUpdateDownloading');
     expect(shell).not.toContain("t('menu.checkUpdates')");
     const terminal = readFileSync(join(ROOT, 'vendor/deepseek-harness/packages/subprocess/subprocess-local/src/index.ts'), 'utf8');
-    expect(terminal).toContain("...(process.platform === 'win32' ? { useConpty: true } : {})");
-    expect(compaction).toContain('DEFAULT_THRESHOLD_RATIO = 0.75');
+    expect(terminal).toContain("import * as nodePty from 'node-pty'");
+    expect(terminal).toContain('spawnSubprocess');
+    expect(compaction).toContain('DEFAULT_THRESHOLD_RATIO = 0.8');
     expect(rtk).toContain('spawnSync');
     expect(rtk).toContain('return false');
   });
@@ -137,6 +151,7 @@ describe('release and runtime packaging contracts', () => {
     const patcher = readFileSync(join(ROOT, 'apps/shell/build/patch-nsis.cjs'), 'utf8');
     const smoke = readFileSync(join(ROOT, 'scripts/verify-nsis-install-layout.mjs'), 'utf8');
     const upgradeSmoke = readFileSync(join(ROOT, 'scripts/verify-nsis-upgrade.mjs'), 'utf8');
+    const shortcutSmoke = readFileSync(join(ROOT, 'scripts/verify-nsis-shortcuts.mjs'), 'utf8');
     const installedRuntime = readFileSync(join(ROOT, 'scripts/verify-installed-runtime.mjs'), 'utf8');
     const hookGate = readFileSync(join(ROOT, 'scripts/verify-nsis-hooks.mjs'), 'utf8');
     const preflight = readFileSync(join(ROOT, 'apps/shell/src/main/preflight.ts'), 'utf8');
@@ -148,6 +163,7 @@ describe('release and runtime packaging contracts', () => {
     expect(installer).not.toMatch(/!macro\s+customInstall\b[\s\S]*?RMDir\s+\/r/i);
     expect(installer).toContain('!macro freecodePrepareInstall');
     expect(installer).toContain('!macro customInstall');
+    expect(installer).toContain('SetOutPath "$INSTDIR"');
     expect(installer).toContain('CreateShortCut "$newStartMenuLink"');
     expect(installer).toContain('CreateShortCut "$newDesktopLink"');
     expect(installer).toContain('WinShell::SetLnkAUMI "$newStartMenuLink"');
@@ -159,9 +175,16 @@ describe('release and runtime packaging contracts', () => {
     expect(smoke).toContain('readdirSync(target).length === 0');
     expect(smoke).toContain('packages');
     expect(smoke).toContain('node_modules');
-    expect(upgradeSmoke).toContain('0.2.4');
+    expect(smoke).toContain('verifyInstalledShortcuts');
+    expect(smoke).toContain('cleanupInstalledShortcuts');
+    expect(upgradeSmoke).toContain('verifyInstalledShortcuts');
+    expect(upgradeSmoke).toContain('cleanupInstalledShortcuts');
+    expect(shortcutSmoke).toContain("GetFolderPath('CommonApplicationData')");
+    expect(shortcutSmoke).toContain("Get-ChildItem -LiteralPath $root -Filter '${SHORTCUT_NAME}.lnk'");
+    expect(shortcutSmoke).toContain('workingDirectory');
+    expect(upgradeSmoke).toContain('0.4.3');
     expect(upgradeSmoke).toContain('rootPackage');
-    expect(upgradeSmoke).toContain('stale 0.2.4 payload marker survived upgrade');
+    expect(upgradeSmoke).toContain('stale ${STABLE_VERSION} payload marker survived upgrade');
     expect(upgradeSmoke).toContain('user-data marker was deleted by upgrade');
     expect(patcher).toContain('dead uninstall helpers');
     expect(installedRuntime).toContain('visible descendant window detected');

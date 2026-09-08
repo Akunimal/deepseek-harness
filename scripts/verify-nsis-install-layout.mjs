@@ -20,11 +20,13 @@
  */
 
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, rmSync, readdirSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { verifyInstalledRuntime } from './verify-installed-runtime.mjs';
+import { removeTestInstall } from './remove-test-install.mjs';
+import { stopInstalledProcesses, stopInstalledProcessesReferencing, verifyInstalledRuntime } from './verify-installed-runtime.mjs';
+import { cleanupInstalledShortcuts, verifyInstalledShortcuts } from './verify-nsis-shortcuts.mjs';
 
 if (process.platform !== 'win32') {
   console.log('verify-nsis-install-layout: skipped (non-Windows host).');
@@ -111,6 +113,7 @@ try {
       try {
         await verifyInstalledRuntime({ installDir, label: 'fresh install' });
         console.log('verify-nsis-install-layout: installed runtime boot/headless smoke passed.');
+        verifyInstalledShortcuts({ installDir, label: 'fresh install shortcuts' });
       } catch (error) {
         console.error(`verify-nsis-install-layout: installed runtime smoke failed: ${error.message}`);
         exitCode = 1;
@@ -132,7 +135,19 @@ try {
     exitCode = 1;
   }
 } finally {
-  try { rmSync(installDir, { recursive: true, force: true }); } catch (error) {
+  try { cleanupInstalledShortcuts({ installDir }); } catch (error) {
+    console.error(`verify-nsis-install-layout: failed to remove temporary shortcuts: ${error.message}`);
+    exitCode = 1;
+  }
+  try {
+    await removeTestInstall(installDir, {
+      label: 'verify-nsis-install-layout test install',
+      beforeAttempt: () => {
+        try { stopInstalledProcesses(installDir); } catch { /* cleanup retries still apply */ }
+        try { stopInstalledProcessesReferencing(installDir); } catch { /* cleanup retries still apply */ }
+      },
+    });
+  } catch (error) {
     console.error(`verify-nsis-install-layout: failed to remove test install: ${error.message}`);
     exitCode = 1;
   }

@@ -1,22 +1,33 @@
 # FreeCode DeepSeek Harness v0.4.0
 
-**Caveman + Updater Fix**
+## English
 
-## Added
+**Updater Fix + Caveman evaluation**
 
-- **Caveman context compression** as an optional toggle alongside RTK in Shell settings. Disabled by default; compresses eligible command output when the Caveman binary is installed separately. / Compresión de contexto Caveman como toggle opcional junto a RTK. Deshabilitado por defecto.
+### Fixed
 
-## Fixed
+- **Application updater**: explicit download control prevents double-download races, and a tray notification appears during the update process.
+- **Update indicator button** aligned with the Send button visual system, replacing the standalone circular control.
+- **Gemini Web2API models** use the `Bearer freecode-local` auth header and include bounded retry/timeout settings.
 
-- **Application updater**: explicit download control prevents double-download race, and a tray notification appears during the update process. / Actualizador de la aplicación: control explícito de descarga y notificación en la bandeja durante la actualización.
-- **Update indicator button** aligned with the Send button visual system, replacing the standalone circular control. / Botón de indicador de actualización alineado con el sistema visual del botón Enviar.
-- **Gemini Web2API models** now work correctly: config defaults match the `Bearer freecode-local` auth header and include full retry/timeout settings. / Los modelos Gemini Web2API ahora funcionan correctamente: los valores por defecto coinciden con el header de autenticación y incluyen configuración completa de reintentos.
+### Changed
 
-## Changed
+- Spanish locale support was verified and documented.
+- Caveman was documented as an opt-in roadmap candidate; it was not bundled or enabled by this release.
+- Added `docs/GEMINI-WEB2API-IMPROVEMENTS.md` with streaming and tool-calling proposals for the Gemini Web2API bridge.
 
-- Spanish locale support verified and documented. / Soporte del locale español verificado y documentado.
-- Added `docs/GEMINI-WEB2API-IMPROVEMENTS.md` with streaming and tool calling enhancement proposals for the Gemini Web2API bridge.
+## Español
 
-## Upgrade
+**Corrección del actualizador + evaluación de Caveman**
 
-Download the installer or portable from the assets below. The application will preserve your settings and data.
+### Corregido
+
+- **Actualizador de la aplicación**: el control explícito de descarga evita carreras de doble descarga y muestra un aviso en la bandeja durante la actualización.
+- **Indicador de actualización** alineado con el sistema visual del botón Enviar, en reemplazo del control circular independiente.
+- **Modelos Gemini Web2API**: usan el header `Bearer freecode-local` e incluyen límites de reintentos y timeout.
+
+### Cambiado
+
+- Se verificó y documentó el locale español.
+- Caveman quedó documentado como candidato opt-in del roadmap; esta release no lo incluye ni lo habilita.
+- Se agregó `docs/GEMINI-WEB2API-IMPROVEMENTS.md` con propuestas de streaming y tool calling para el puente Gemini Web2API.

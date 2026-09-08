@@ -62,6 +62,13 @@ function stopProcessesUnder(installDir) {
   powershell(command, 15_000);
 }
 
+function stopProcessesReferencing(installDir) {
+  const prefix = installDir.endsWith('\\') ? installDir : `${installDir}\\`;
+  const escaped = prefix.replaceAll("'", "''");
+  const command = `$needle='${escaped}'.ToLowerInvariant(); $self=$PID; Get-CimInstance Win32_Process | Where-Object { $_.ProcessId -ne $self -and $_.CommandLine -and $_.CommandLine.ToLowerInvariant().Contains($needle) } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }`;
+  powershell(command, 15_000);
+}
+
 function visibleDescendantProbe(rootPid, durationMs = 12_000) {
   const script = String.raw`
 $ErrorActionPreference = 'Stop'
@@ -174,4 +181,8 @@ export async function verifyInstalledRuntime({ installDir, label }) {
 
 export function stopInstalledProcesses(installDir) {
   stopProcessesUnder(installDir);
+}
+
+export function stopInstalledProcessesReferencing(installDir) {
+  stopProcessesReferencing(installDir);
 }

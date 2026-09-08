@@ -78,6 +78,11 @@ if (shortcutContract.some((pattern) => !pattern.test(source))) {
   process.exit(1);
 }
 
+if (!/!macro\s+customInstall[\s\S]*?SetOutPath\s+"\$INSTDIR"[\s\S]*?CreateShortCut\s+"\$newStartMenuLink"[\s\S]*?CreateShortCut\s+"\$newDesktopLink"/i.test(source)) {
+  console.error('verify-nsis-hooks: shortcut repair must pin $OUTDIR to $INSTDIR before recreating both links.');
+  process.exit(1);
+}
+
 const POST_EXTRACTION_HOOKS = new Set(['customInstall']);
 const MUTATION_COMMANDS = /(?:^|\s)(RMDir|Delete|Rename|CopyFiles|WriteRegStr|WriteRegDWORD|DeleteRegKey|DeleteRegValue)\b/i;
 

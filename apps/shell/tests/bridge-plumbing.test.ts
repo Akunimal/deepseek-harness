@@ -16,37 +16,24 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
-
-function buildExtraEnv(input: {
-  dialogBridge: { endpoint: string; token: string } | null;
-}): Record<string, string> {
-  return {
-    DSH_CLIENT_TITLE: 'FreeCode',
-    ...(input.dialogBridge ? {
-      FREECODE_DIALOG_BRIDGE_ENDPOINT: input.dialogBridge.endpoint,
-      FREECODE_DIALOG_BRIDGE_TOKEN: input.dialogBridge.token,
-    } : {}),
-  };
-}
+import { buildHarnessExtraEnv } from '../src/main/harness-env.js';
 
 describe('bridge extraEnv plumbing', () => {
   it('includes both bridge env vars when the bridge is created', () => {
-    const env = buildExtraEnv({
-      dialogBridge: { endpoint: 'http://127.0.0.1:56789/pick-directory', token: 'a'.repeat(64) },
-    });
+    const env = buildHarnessExtraEnv({ endpoint: 'http://127.0.0.1:56789/pick-directory', token: 'a'.repeat(64) });
     expect(env.FREECODE_DIALOG_BRIDGE_ENDPOINT).toBe('http://127.0.0.1:56789/pick-directory');
     expect(env.FREECODE_DIALOG_BRIDGE_TOKEN).toHaveLength(64);
   });
 
   it('omits bridge env vars when the bridge is not available', () => {
-    const env = buildExtraEnv({ dialogBridge: null });
+    const env = buildHarnessExtraEnv(null);
     expect(env.FREECODE_DIALOG_BRIDGE_ENDPOINT).toBeUndefined();
     expect(env.FREECODE_DIALOG_BRIDGE_TOKEN).toBeUndefined();
   });
 
   it('never forgets DSH_CLIENT_TITLE', () => {
     for (const bridge of [null, { endpoint: 'x', token: 'y' }]) {
-      const env = buildExtraEnv({ dialogBridge: bridge });
+      const env = buildHarnessExtraEnv(bridge);
       expect(env.DSH_CLIENT_TITLE).toBe('FreeCode');
     }
   });

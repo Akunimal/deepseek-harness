@@ -15,6 +15,9 @@ apps/shell/resources/freecode/
 !apps/shell/resources/freecode/.gitkeep
 apps/shell/release/
 apps/shell/release-*/
+# Local release staging; upload these assets but do not commit binaries.
+release-assets-v0.5.0/
+graphify-out/cache/
 *.exe
 !native/**/build/
 

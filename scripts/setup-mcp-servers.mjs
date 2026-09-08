@@ -1,165 +1,130 @@
+#!/usr/bin/env node
 /**
- * MCP Server Pre-install Script
- * 
- * Installs pre-configured MCP servers for the FreeCode DeepSeek Harness:
- * 1. Serena MCP (oraios/serena) - Semantic analysis + structural editing
- * 2. LSP MCP Server (isaacphi/mcp-language-server) - Language server integration
- * 
- * Usage: node scripts/setup-mcp-servers.mjs [--all|--serena|--lsp]
+ * Install and activate FreeCode's supported MCP servers.
+ *
+ * The user-controlled enable/disable switch is DSH_HOME/mcp/servers.json.
+ * The generated DSH_HOME/cordis.patch.yml is the actual runtime overlay and
+ * is regenerated atomically after every setup run. All child commands use
+ * argv arrays; no shell interpolation is used for package installation.
  */
 
-import { execSync } from 'child_process';
-import { existsSync, mkdirSync, writeFileSync } from 'fs';
-import { join } from 'path';
-import { homedir } from 'os';
+import { execFileSync } from 'node:child_process';
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
+import {
+  MCP_SERVER_DEFINITIONS,
+  defaultMcpConfig,
+  mergeManagedPatch,
+  mergeMcpConfig,
+  renderMcpPatch,
+  validateMcpConfig,
+} from './mcp-config.mjs';
 
 const DSH_HOME = process.env.DSH_HOME || join(homedir(), '.dsh');
 const MCP_CONFIG_DIR = join(DSH_HOME, 'mcp');
-const CORDIS_CONFIG = join(DSH_HOME, 'cordis.yml');
+const MCP_CONFIG = join(MCP_CONFIG_DIR, 'servers.json');
+const CORDIS_PATCH = join(DSH_HOME, 'cordis.patch.yml');
 
-const SERENA_PACKAGE = '@anthropic-ai/serena-mcp';
-const LSP_PACKAGE = '@isaacphi/mcp-language-server';
+function npmCommand() {
+  return process.platform === 'win32' ? 'npm.cmd' : 'npm';
+}
 
-function runCommand(cmd) {
+function readExistingConfig() {
+  if (!existsSync(MCP_CONFIG)) return defaultMcpConfig();
   try {
-    console.log(`  Running: ${cmd}`);
-    execSync(cmd, { stdio: 'inherit', timeout: 300000 });
+    return mergeMcpConfig(JSON.parse(readFileSync(MCP_CONFIG, 'utf8')));
+  } catch (error) {
+    throw new Error(`cannot read ${MCP_CONFIG}: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+function writeAtomic(path, contents) {
+  const tmp = `${path}.tmp-${process.pid}`;
+  writeFileSync(tmp, contents, { encoding: 'utf8', mode: 0o600 });
+  renameSync(tmp, path);
+}
+
+function writeConfig(config) {
+  mkdirSync(MCP_CONFIG_DIR, { recursive: true });
+  writeAtomic(MCP_CONFIG, `${JSON.stringify(config, null, 2)}\n`);
+  const existingPatch = existsSync(CORDIS_PATCH) ? readFileSync(CORDIS_PATCH, 'utf8') : '';
+  writeAtomic(CORDIS_PATCH, mergeManagedPatch(existingPatch, renderMcpPatch(config)));
+}
+
+function install(server) {
+  const command = server.install.command;
+  const args = server.install.args;
+  console.log(`  Installing ${server.id}: ${command} ${args.join(' ')}`);
+  try {
+    execFileSync(command, args, {
+      cwd: DSH_HOME,
+      stdio: 'inherit',
+      timeout: 300_000,
+      windowsHide: true,
+    });
     return true;
   } catch (error) {
-    console.error(`  Failed: ${error.message}`);
+    console.error(`  Failed to install ${server.id}: ${error instanceof Error ? error.message : String(error)}`);
+    console.error(`  Prerequisite: ${server.install.prerequisite}`);
     return false;
   }
 }
 
-function installSerena() {
-  console.log('\n🔧 Installing Serena MCP Server...');
-  
-  if (!existsSync(MCP_CONFIG_DIR)) {
-    mkdirSync(MCP_CONFIG_DIR, { recursive: true });
+function installLspDependencies() {
+  try {
+    execFileSync(npmCommand(), ['install', '--global', '--no-audit', '--no-fund', 'typescript', 'typescript-language-server', 'pyright'], {
+      cwd: DSH_HOME,
+      stdio: 'inherit',
+      timeout: 300_000,
+      windowsHide: true,
+    });
+    return true;
+  } catch (error) {
+    console.error(`  Failed to install LSP language-server dependencies: ${error instanceof Error ? error.message : String(error)}`);
+    return false;
   }
-
-  const config = {
-    serverName: 'serena',
-    command: 'npx',
-    args: ['-y', SERENA_PACKAGE],
-    rootDir: '${workspaceRoot}',
-    description: 'Semantic analysis at symbol level + structural editing'
-  };
-
-  const configPath = join(MCP_CONFIG_DIR, 'serena.json');
-  writeFileSync(configPath, JSON.stringify(config, null, 2));
-  console.log(`  Config written to: ${configPath}`);
-
-  // Install globally
-  const success = runCommand(`npm install -g ${SERENA_PACKAGE}`);
-  if (success) {
-    console.log('✅ Serena MCP installed successfully');
-  }
-  return success;
 }
 
-function installLSP() {
-  console.log('\n🔧 Installing LSP MCP Server...');
-  
-  if (!existsSync(MCP_CONFIG_DIR)) {
-    mkdirSync(MCP_CONFIG_DIR, { recursive: true });
+function selectedIds(args) {
+  if (args.includes('--all') || args.length === 0) return new Set(MCP_SERVER_DEFINITIONS.map((server) => server.id));
+  const selected = new Set();
+  if (args.includes('--serena')) selected.add('serena');
+  if (args.includes('--lsp')) {
+    selected.add('lsp-typescript');
+    selected.add('lsp-python');
   }
-
-  const config = {
-    servers: [
-      {
-        serverName: 'lsp-typescript',
-        command: 'npx',
-        args: ['-y', LSP_PACKAGE, '--lsp', 'typescript'],
-        rootDir: '${workspaceRoot}',
-        description: 'TypeScript language server integration'
-      },
-      {
-        serverName: 'lsp-python',
-        command: 'npx',
-        args: ['-y', LSP_PACKAGE, '--lsp', 'python'],
-        rootDir: '${workspaceRoot}',
-        description: 'Python language server integration'
-      }
-    ]
-  };
-
-  const configPath = join(MCP_CONFIG_DIR, 'lsp.json');
-  writeFileSync(configPath, JSON.stringify(config, null, 2));
-  console.log(`  Config written to: ${configPath}`);
-
-  // Install globally
-  const success = runCommand(`npm install -g ${LSP_PACKAGE}`);
-  if (success) {
-    console.log('✅ LSP MCP installed successfully');
-  }
-  return success;
+  if (selected.size === 0) throw new Error('use --all, --serena, or --lsp');
+  return selected;
 }
 
-function updateCordisConfig() {
-  console.log('\n📝 Updating cordis.yml configuration...');
-  
-  const cordisContent = `
-# FreeCode DeepSeek Harness - MCP Server Configuration
-# Auto-generated by setup-mcp-servers.mjs
-
-plugins:
-  # Serena MCP - Semantic analysis
-  mcp-client:
-    config:
-      serverName: serena
-      command: "npx"
-      args: ["-y", "${SERENA_PACKAGE}"]
-      rootDir: "\${workspaceRoot}"
-
-  # LSP MCP - TypeScript
-  mcp-client:
-    config:
-      serverName: lsp-typescript
-      command: "npx"
-      args: ["-y", "${LSP_PACKAGE}", "--lsp", "typescript"]
-      rootDir: "\${workspaceRoot}"
-
-  # LSP MCP - Python
-  mcp-client:
-    config:
-      serverName: lsp-python
-      command: "npx"
-      args: ["-y", "${LSP_PACKAGE}", "--lsp", "python"]
-      rootDir: "\${workspaceRoot}"
-`;
-
-  writeFileSync(CORDIS_CONFIG, cordisContent);
-  console.log(`✅ cordis.yml updated at: ${CORDIS_CONFIG}`);
-}
-
-async function main() {
+function main() {
   const args = process.argv.slice(2);
-  const installAll = args.includes('--all') || args.length === 0;
-  const installSerenaFlag = args.includes('--serena') || installAll;
-  const installLSPFlag = args.includes('--lsp') || installAll;
+  const selected = selectedIds(args);
+  const config = readExistingConfig();
+  const results = new Map();
 
-  console.log('🚀 FreeCode DeepSeek Harness - MCP Server Setup');
-  console.log('================================================');
-
-  let success = true;
-
-  if (installSerenaFlag) {
-    success = installSerena() && success;
+  if (selected.has('serena')) results.set('serena', install(MCP_SERVER_DEFINITIONS.find((server) => server.id === 'serena')));
+  if (selected.has('lsp-typescript') || selected.has('lsp-python')) {
+    const dependenciesOk = installLspDependencies();
+    results.set('lsp-typescript', dependenciesOk && install(MCP_SERVER_DEFINITIONS.find((server) => server.id === 'lsp-typescript')));
+    results.set('lsp-python', dependenciesOk && install(MCP_SERVER_DEFINITIONS.find((server) => server.id === 'lsp-python')));
   }
 
-  if (installLSPFlag) {
-    success = installLSP() && success;
+  for (const server of config.servers) {
+    if (selected.has(server.id)) server.enabled = results.get(server.id) === true;
   }
-
-  if (success) {
-    updateCordisConfig();
-    console.log('\n🎉 Setup complete! MCP servers are ready to use.');
-    console.log('   Restart FreeCode DeepSeek Harness to load the servers.');
-  } else {
-    console.log('\n⚠️  Some installations failed. Check the errors above.');
-    process.exit(1);
-  }
+  validateMcpConfig(config);
+  writeConfig(config);
+  console.log(`\nMCP config: ${MCP_CONFIG}`);
+  console.log(`DSH patch:  ${CORDIS_PATCH}`);
+  console.log('Enabled servers:', config.servers.filter((server) => server.enabled).map((server) => server.id).join(', ') || '(none)');
+  if ([...results.values()].some((ok) => !ok)) process.exitCode = 1;
 }
 
-main().catch(console.error);
+try {
+  main();
+} catch (error) {
+  console.error(error instanceof Error ? error.message : String(error));
+  process.exitCode = 1;
+}

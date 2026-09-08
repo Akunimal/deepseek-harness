@@ -52,22 +52,59 @@ function criticalPaths(resourcesDir: string, platform: NodeJS.Platform): { path:
 }
 
 /**
- * Bridge invariant: on win32 the shipped bundle MUST contain the bridge
- * env-var reference. If source has it but the compiled bundle does not, the
- * install will crash on directory picker click (F1 postmortem: v0.2.4
+ * Bridge invariant: on win32 the shipped bundle MUST contain the complete
+ * authenticated bridge contract. If source has it but the compiled bundle does not,
+ * the install will crash on directory picker click (F1 postmortem: v0.2.4
  * shipped with stale `lib/index.js` that lacked the bridge code path).
  */
-function verifyBridgeInvariant(resourcesDir: string): string | null {
+function verifyBridgeInvariant(resourcesDir: string, platform: NodeJS.Platform): string | null {
+  if (platform !== 'win32') return null
   const bundle = join(resourcesDir, 'dsh', 'node_modules', '@deepseek-ai',
     'dsh-host-directory-picker-native', 'lib', 'index.js');
   if (!existsSync(bundle)) return null; // already reported as missing above
   try {
     const contents = readFileSync(bundle, 'utf8');
-    if (!contents.includes('FREECODE_DIALOG_BRIDGE_ENDPOINT')) {
+    const requiredMarkers = [
+      'FREECODE_DIALOG_BRIDGE_ENDPOINT',
+      'FREECODE_DIALOG_BRIDGE_TOKEN',
+      'x-freecode-dialog-token',
+      'fetch(',
+    ];
+    if (requiredMarkers.some((marker) => !contents.includes(marker))) {
       return 'directory-picker-native bundle lacks Electron dialog bridge — Win32 picker will crash. Rebuild vendor and repackage.';
     }
   } catch {
     // Read failure covered by the existsSync check above.
+  }
+  return null;
+}
+
+/**
+ * Runtime manifest invariant: a present-but-empty manifest is just as broken
+ * as a missing one. This catches truncated AppImage/NSIS payloads before the
+ * supervisor starts, where the failure would otherwise look like a generic
+ * harness boot timeout.
+ */
+function verifyManifestInvariant(resourcesDir: string): string | null {
+  const manifestPath = join(resourcesDir, 'runtime-manifest.json');
+  if (!existsSync(manifestPath)) return null; // already reported as missing
+  try {
+    const contents = readFileSync(manifestPath, 'utf8');
+    if (contents.trim().length === 0) {
+      return `runtime manifest is empty: ${manifestPath}`;
+    }
+    const manifest: unknown = JSON.parse(contents);
+    if (!manifest || typeof manifest !== 'object' || Array.isArray(manifest)) {
+      return `runtime manifest is not a JSON object: ${manifestPath}`;
+    }
+    const record = manifest as Record<string, unknown>;
+    for (const field of ['version', 'cli']) {
+      if (typeof record[field] !== 'string' || record[field].trim().length === 0) {
+        return `runtime manifest is missing a valid ${field}: ${manifestPath}`;
+      }
+    }
+  } catch {
+    return `runtime manifest is not valid JSON: ${manifestPath}`;
   }
   return null;
 }
@@ -142,8 +179,11 @@ export function verifyHarnessLayout(options: PreflightOptions): PreflightResult 
     }
   }
 
-  const bridgeWarning = verifyBridgeInvariant(options.resourcesDir);
+  const bridgeWarning = verifyBridgeInvariant(options.resourcesDir, platform);
   if (bridgeWarning) warnings.push(bridgeWarning);
+
+  const manifestWarning = verifyManifestInvariant(options.resourcesDir);
+  if (manifestWarning) warnings.push(manifestWarning);
 
   return { ok: missing.length === 0 && warnings.length === 0, missing, warnings };
 }

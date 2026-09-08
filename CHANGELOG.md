@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.5.0 — 2026-09-06
+## 0.5.0 — 2026-09-07
 
 ### Added / Agregado
 
@@ -10,22 +10,28 @@
   language. / Módulo OCR que envuelve el CLI de Tesseract para extracción de
   texto de imágenes.
 
-- **MCP server preinstall** — Automated setup for Serena MCP (semantic analysis,
-  symbol-level navigation, structural editing) and LSP MCP Server (TypeScript
-  and Python language server integration). Run `pnpm setup:mcp` to install.
-  / Preinstalación automatizada de servidores MCP para análisis semántico y
-  servidores de lenguaje.
+- **Embedded MCP configuration** — The client bridge and catalog are shipped,
+  materialized on first boot, and enabled by default under the user's
+  `dsh-home`. `servers.json` exposes independent `enabled` switches for Serena,
+  TypeScript LSP, and Python LSP; the managed Cordis patch preserves unrelated
+  user rows. The external executables remain explicit prerequisites instead of
+  being downloaded silently by the release. / La configuración y el bridge
+  cliente MCP vienen incluidos y activos; `servers.json` permite activar o
+  desactivar Serena, LSP TypeScript y LSP Python, mientras los ejecutables
+  externos siguen siendo prerequisites explícitos.
 
 - **Thinking model support** — Reasoning policy now recognizes non-DeepSeek
   thinking-capable models (mimo-v2.5, qwen*think, gemini*thinking) with an
   off/low/high vocabulary. / La política de razonamiento ahora reconoce modelos
   con thinking de terceros.
 
-- **Upstream sync** — Full sync of `vendor/deepseek-harness` from upstream
-  `deepseek-ai/deepseek-harness` v0.1.1-rc.2 → v0.1.3-alpha.1 (2063 commits,
-  ~8000 files). Now at parity with upstream master. Local patches re-applied:
-  `windowsHide` in SDK client, `node-pty` ConPTY patch.
-  / Sync completo del vendor con upstream.
+- **Upstream sync with modular overlays** — `vendor/deepseek-harness` remains a
+  git subtree and FreeCode changes are replayable patches in
+  `patches/upstream/`: dialog bridge, browser tool, shell optimizers, and
+  branding. The ordered, idempotent applier runs after upstream fetch/pull and
+  fails closed on partial application. / El vendor queda como subtree y las
+  modificaciones de FreeCode viven en patches modulares, reaplicables después
+  de cada actualización de upstream.
 
 ### Fixed / Corregido
 
@@ -44,6 +50,18 @@
   - `GeminiWeb2ApiSupervisor`: mutex on start/stop prevents race conditions
   - `TorFleet onChange`: remove duplicate listener on toggle (memory leak fix)
 
+- **Failed-installer regression fixed** — The v0.5.0 candidate had lost the
+  Electron dialog bridge from the Win32 `directory-picker-native` bundle.
+  Preflight, source markers, bundle hashes, installer layout smoke, and the
+  isolated upgrade smoke now reject a bridge-free or truncated runtime and
+  point users to the last known-good `v0.4.3`.
+
+- **Updater hardening** — About reads `app.getVersion()`, update checks run at
+  startup and every six hours, the update control is the same 34px circular
+  Send button with a down arrow, and the tray reports downloading/installing
+  status. The app refuses to call `quitAndInstall(true)` without an explicit
+  successful `downloadUpdate()`.
+
 ### Changed / Cambiado
 
 - **Gemini Web endpoint** is now explicitly documented as text-only queries.
@@ -58,12 +76,21 @@
   - WorkerHandle documentation: documented sync requirement between
     opencode-adapter/types and shared-types
 
-### Deferred / Diferido
+- **Manual release validation** — The Windows NSIS installer, Windows portable
+  executable, and Linux AppImage are built locally after the full test,
+  contract, bundle, closure, fresh-install, and `v0.4.3` upgrade gates pass;
+  no GitHub Actions release workflow is used.
 
-- **Electron desktop build** (`pnpm build:desktop`) — Not executed in this
-  release cycle. Requires runtime bundling.
-- **Tests** — Pre-existing `pnpm test` failure on `link-upstream-workspace-
-  packages.mjs` EACCES. Not related to v0.5.0 changes.
+- **Cross-platform contract hardening** — Linux versioned shared libraries such
+  as `libvips-cpp.so.8.18.3` are now recognized by the native-runtime contract,
+  and the WSL packager repairs stale Windows/WSL Vite links before rebuilding.
+  / Las librerías Linux versionadas ahora son reconocidas por el contrato y el
+  packager WSL repara links Vite viejos entre Windows y WSL.
+
+- **Graphify refresh** — Graphify `0.9.53` produced the reproducible structural
+  `apps/shell` map (433 nodes, 749 edges, 20 communities); semantic extraction
+  was not claimed without an LLM API key. / Se actualizó el mapa estructural
+  reproducible con Graphify `0.9.53`.
 
 ## 0.4.0 — 2026-08-29
 

@@ -1,0 +1,17 @@
+diff --git a/vendor/deepseek-harness/packages/client/ui-sidebar/src/client/SidebarRoot.tsx b/vendor/deepseek-harness/packages/client/ui-sidebar/src/client/SidebarRoot.tsx
+index 9dde97bf9e..5330989614 100644
+--- a/vendor/deepseek-harness/packages/client/ui-sidebar/src/client/SidebarRoot.tsx
++++ b/vendor/deepseek-harness/packages/client/ui-sidebar/src/client/SidebarRoot.tsx
+@@ -154,10 +154,10 @@ export function SidebarRoot({
+               <span className={css.brandName}>
+                 {renderSlot('sidebar.brand.name', {}, {
+                   fallback: buildVersion === undefined
+-                    ? <span className={css.fallbackBrandName}>{t('brand.localBuild')}</span>
++                    ? <span className={css.fallbackBrandName}>FreeCode</span>
+                     : (
+                       <span className={css.localBuildBrand}>
+-                        <span className={css.localBuildTitle}>{t('brand.localBuild')}</span>
++                        <span className={css.localBuildTitle}>FreeCode</span>
+                         <span className={css.buildVersion}>{buildVersion}</span>
+                       </span>
+                     ),

@@ -1,7 +1,7 @@
 # Known issues / Problemas conocidos
 
-Última revisión / Last reviewed: 2026-08-23  
-Baseline revisada / Reviewed baseline: `v0.2.2`
+Última revisión / Last reviewed: 2026-09-07
+Baseline revisada / Reviewed baseline: `v0.5.0`
 
 ## Estado actual / Current status
 
@@ -23,17 +23,17 @@ The portable and setup artifacts include a local runtime and can require several
 
 Los artefactos portable y setup incluyen un runtime local y pueden requerir varios minutos y bastante espacio en disco durante la primera instalación o extracción. Es un costo operativo del empaquetado actual, no una evidencia de que la aplicación se haya colgado. Las notas de release deben seguir informando el tamaño esperado y el comportamiento del primer arranque.
 
-### KI-003 — RTK remains an external optional tool / RTK sigue siendo una herramienta externa opcional
+### KI-003 — RTK and Caveman remain external optional tools / RTK y Caveman siguen siendo herramientas externas opcionales
 
-RTK is not bundled, downloaded, or installed by FreeCode. The toggle only takes effect when an `rtk` executable is already available; otherwise the original eligible command runs. This is intentional. A future Caveman integration must preserve the same explicit opt-in rule.
+RTK and Caveman are not bundled, downloaded, or installed by FreeCode. The Shell settings card exposes independent toggles; RTK defaults on when its executable is present, while Caveman defaults off. A toggle only takes effect when the corresponding executable is already available; otherwise the original eligible command runs. This is intentional.
 
-FreeCode no incluye, descarga ni instala RTK. El toggle sólo tiene efecto cuando ya existe un ejecutable `rtk`; de lo contrario se ejecuta el comando elegible original. Es intencional. Una futura integración de Caveman debe conservar la misma regla de activación explícita.
+FreeCode no incluye, descarga ni instala RTK ni Caveman. La tarjeta Shell de Configuración expone toggles independientes; RTK queda activo por defecto si existe su ejecutable y Caveman queda desactivado. Cada toggle sólo tiene efecto cuando ya existe el ejecutable correspondiente; de lo contrario se ejecuta el comando elegible original. Es intencional.
 
-### KI-004 — Caveman is not implemented yet / Caveman todavía no está implementado
+### KI-004 — External MCP processes need prerequisites / Los procesos MCP externos requieren prerequisites
 
-Caveman is a roadmap candidate, not a current FreeCode feature. Do not assume that installing its CLI changes FreeCode behavior. Any future integration must first pass the recovery, fidelity, Windows packaging, storage, protocol, and license gates in [`ROADMAP.md`](ROADMAP.md).
+The MCP client bridge, catalog, configuration file, and managed patch are shipped and enabled on first boot. Serena and the TypeScript/Python LSP processes remain external prerequisites (`uvx`, Go, npm language servers). If one is missing, the managed entry is explicitly disabled/reported and the core app continues to boot. See [`mcp-servers.md`](mcp-servers.md).
 
-Caveman es un candidato del roadmap, no una función actual de FreeCode. Instalar su CLI no cambia el comportamiento de FreeCode. Una futura integración debe superar primero los gates de recuperación, fidelidad, empaquetado Windows, almacenamiento, protocolo y licencia de [`ROADMAP.md`](ROADMAP.md).
+El bridge cliente MCP, el catálogo, el archivo de configuración y el patch administrado vienen incluidos y activados en el primer arranque. Los procesos Serena y LSP de TypeScript/Python siguen requiriendo prerequisites externos (`uvx`, Go y language servers npm). Si falta uno, la entrada administrada se desactiva/informa explícitamente y la app principal sigue arrancando. Ver [`mcp-servers.md`](mcp-servers.md).
 
 ### KI-005 — Provider/model desynchronization can look like an invalid API key / El desajuste proveedor-modelo puede parecer una API key inválida
 

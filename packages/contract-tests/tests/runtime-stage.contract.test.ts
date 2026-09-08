@@ -42,7 +42,7 @@ const MACHO_MAGICS = [
 function hasNativeBinary(dir: string): boolean {
   if (!existsSync(dir)) return false;
   return readdirSync(dir).some(
-    (f) => f.endsWith('.node') || f.endsWith('.dll') || f.endsWith('.dylib') || f.endsWith('.so'),
+    (f) => f.endsWith('.node') || f.endsWith('.dll') || f.endsWith('.dylib') || f.endsWith('.so') || f.includes('.so.'),
   );
 }
 
@@ -55,7 +55,7 @@ function checkMagicBytes(filePath: string, expected: number[]): boolean {
 function findNativeFiles(dir: string): string[] {
   if (!existsSync(dir)) return [];
   return readdirSync(dir)
-    .filter((f) => f.endsWith('.node') || f.endsWith('.dll') || f.endsWith('.dylib') || f.endsWith('.so'))
+    .filter((f) => f.endsWith('.node') || f.endsWith('.dll') || f.endsWith('.dylib') || f.endsWith('.so') || f.includes('.so.'))
     .map((f) => join(dir, f));
 }
 
