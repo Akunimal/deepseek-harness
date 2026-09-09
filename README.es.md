@@ -15,9 +15,12 @@ servidores MCP y llamadas al modelo.
 - un instalador NSIS;
 - un ejecutable portable de Windows.
 
-Linux y macOS quedan como targets manuales para contribuidores. El gate de
-0.5.0 no compila, prueba ni sube binarios de esos sistemas. Las compilaciones
-son locales y no usan workflows de GitHub Actions.
+Linux y macOS quedan como targets manuales para contribuidores. Durante el
+desarrollo pudieron generarse binarios Linux localmente, pero no fueron
+probados en un Linux real porque el mantenedor usa Windows; necesitan testing
+en Linux antes de considerarse utilizables. No se sube ningún binario
+Linux/macOS como asset oficial de la release 0.5.0. Las compilaciones son
+locales y no usan workflows de GitHub Actions.
 
 \`0.4.3\` es la última referencia operativa conocida porque abre bien. No es la
 fuente de verdad y puede no contener los fixes de este worktree. El gate de

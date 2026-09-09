@@ -157,7 +157,9 @@ pnpm --filter @freecode/shell smoke:nsis
 pnpm release:gate
 ```
 
-No Linux/macOS build or AppImage verification is part of 0.5.0.
+No Linux/macOS build or AppImage verification is part of the official 0.5.0
+gate. Local Linux artifacts may exist, but they remain unverified until tested
+on a real Linux system.
 
 ## Phase 8 — documentation, lock and release
 

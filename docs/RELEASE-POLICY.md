@@ -4,7 +4,8 @@ Releases are performed manually from a maintainer workstation.
 
 The published release target is Windows x64 only: NSIS setup, portable
 executable, and the matching Windows Harness runtime archive. Linux and macOS
-builds remain optional source artifacts and are not required, uploaded, or
+builds remain optional source artifacts; they may be generated locally but
+require testing on their real operating system and are not required, uploaded, or
 claimed by the Windows release checklist.
 
 This repository intentionally has no GitHub Actions release workflow. Do not

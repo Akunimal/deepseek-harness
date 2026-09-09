@@ -4,9 +4,12 @@
 
 ### Windows-only anti-regression release
 
-0.5.0 publishes only Windows x64 NSIS and portable artifacts. Linux and macOS
-are contributor-only manual build targets; no Linux/macOS binary is built or
-uploaded for this release. The release gate requires a clean install and launch
+0.5.0 officially publishes only Windows x64 NSIS and portable artifacts. Linux
+and macOS remain contributor-only manual targets. Linux binaries may have been
+generated locally during development, but they were not tested on a real Linux
+system by the maintainer and require Linux testing before being considered
+usable. No Linux/macOS binary is uploaded as an official 0.5.0 release asset.
+The release gate requires a clean install and launch
 and deliberately does not require upgrading an existing 0.4.3 installation.
 `0.4.3` remains the last known-good recovery reference because it opens, but it
 is not the source of truth for the current fixes.
@@ -74,9 +77,12 @@ workflow is used.
 
 ### Release anti-regresiones solo Windows
 
-0.5.0 publica únicamente instalador NSIS y portable para Windows x64. Linux y
-macOS quedan como targets manuales de contribuidores; no se compila ni sube
-ningún binario de esos sistemas para esta release. El gate exige instalación y
+0.5.0 publica oficialmente únicamente instalador NSIS y portable para Windows
+x64. Linux y macOS quedan como targets manuales de contribuidores. Durante el
+desarrollo pudieron generarse binarios Linux localmente, pero no fueron
+probados en un sistema Linux real porque el mantenedor usa Windows; necesitan
+testing en Linux antes de considerarse utilizables. No se sube ningún binario
+Linux/macOS como asset oficial de la release 0.5.0. El gate exige instalación y
 apertura limpia y deliberadamente no exige actualizar una instalación existente
 desde 0.4.3. `0.4.3` sigue siendo la referencia de recuperación conocida porque
 abre bien, pero no es la fuente de verdad de los fixes actuales.

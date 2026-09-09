@@ -328,7 +328,9 @@ Final Windows artifacts are under `apps/shell/release/`:
 - `FreeCode-DeepSeek-Harness-0.5.0-win-x64-setup.exe.blockmap`
 - the matching Windows runtime archive and `.sha256` checksum.
 
-No Linux/macOS artifact was built for this candidate, and no GitHub Actions
-workflow was used. A tag/release is permitted only from the reviewed final
+Linux/macOS are outside the official 0.5.0 evidence. Local Linux artifacts may
+exist from previous or development builds, but they were not tested on a real
+Linux host by the Windows maintainer and require separate Linux testing. None
+were uploaded. No GitHub Actions workflow was used. A tag/release is permitted only from the reviewed final
 commit containing this ledger update; do not treat the old 0.4.3 binaries or
 the previously deleted 0.5.0 candidate as release evidence.

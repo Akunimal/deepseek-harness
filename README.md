@@ -15,9 +15,11 @@ calls.
 - an NSIS installer;
 - a portable Windows executable.
 
-Linux and macOS are contributor-only manual targets. No Linux/macOS artifact is
-built, tested or uploaded by the 0.5.0 release gate. Builds are local and do
-not use GitHub Actions workflows.
+Linux and macOS are contributor-only manual targets. Linux binaries may have
+been generated locally during development, but they were not tested on a real
+Linux machine by the maintainer and require Linux testing before being treated
+as usable. No Linux/macOS artifact is uploaded as an official 0.5.0 release
+asset. Builds are local and do not use GitHub Actions workflows.
 
 `0.4.3` is the last known-good operational reference because it opens. It is
 not the source of truth and may not contain the fixes in this worktree. The
