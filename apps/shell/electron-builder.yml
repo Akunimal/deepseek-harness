@@ -30,13 +30,6 @@ win:
   target:
     - nsis
     - portable
-mac:
-  target:
-    - dmg
-linux:
-  icon: build/icon.png
-  target:
-    - AppImage
 nsis:
   artifactName: FreeCode-DeepSeek-Harness-${version}-${os}-${arch}-setup.${ext}
   oneClick: true

@@ -26,6 +26,7 @@
   config:
     text: >-
       You are a coding agent powered by the {{model}} model. Your working directory is {{cwd}}.
+      FreeCode automatically activates this workspace before every Serena MCP call; treat it as the active project and do not ask the user to activate it.
 
 - id: agent-instructions
   name: '@deepseek-ai/dsh-agent-instructions'
@@ -233,6 +234,48 @@
         maxRounds: 64
 
 # ── remaining model-facing rows ─────────────────────────────────────────────
+
+# FreeCode's managed MCP servers are agent-plane capabilities. They belong in
+# Standard (where the model-facing tools are composed), not only in the host
+# patch. Environment flags are generated from mcp/servers.json by the shell;
+# disabled entries stay inert without making the whole harness optional.
+- id: freecode-mcp-serena
+  name: '@deepseek-ai/dsh-mcp-client'
+  disabled: !!js process.env.FREECODE_MCP_SERENA_ENABLED !== 'true'
+  config:
+    transport: stdio
+    serverName: serena
+    command: !!js process.env.FREECODE_UVX_COMMAND ?? 'uvx'
+    # The web runtime cwd is DSH_HOME, not the selected workspace. Let Serena
+    # start without auto-scanning a drive root; the MCP bridge automatically
+    # activates the session workspace before each Serena call.
+    args: ['--from', 'git+https://github.com/oraios/serena', 'serena', 'start-mcp-server', '--context', 'claude-code']
+    cwd: !!js process.cwd()
+    projectActivation:
+      toolName: activate_project
+      pathArgument: project
+    failOnStartupError: false
+    reconnect:
+      enabled: true
+      initialDelayMs: 500
+      maxDelayMs: 30000
+      maxAttempts: 10
+
+- id: freecode-mcp-free-search
+  name: '@deepseek-ai/dsh-mcp-client'
+  disabled: !!js process.env.FREECODE_MCP_FREE_SEARCH_ENABLED !== 'true'
+  config:
+    transport: stdio
+    serverName: free-search
+    command: !!js process.env.FREECODE_UVX_COMMAND ?? 'uvx'
+    args: ['free-search-mcp']
+    cwd: !!js process.cwd()
+    failOnStartupError: false
+    reconnect:
+      enabled: true
+      initialDelayMs: 500
+      maxDelayMs: 30000
+      maxAttempts: 10
 
 - id: tool-ask-user
   name: '@deepseek-ai/dsh-tool-ask-user'

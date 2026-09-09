@@ -47,7 +47,7 @@ describe('bash settings section', () => {
     const bench = await boot()
     expect(bench.bash.config.timeoutMs).toBe(60_000)
     expect(bench.bash.config.rtk).toBe(true)
-    expect(bench.bash.config.caveman).toBe(false)
+    expect(bench.bash.config.caveman).toBe(true)
 
     await bench.ctx.settings.update(SHELL_SETTINGS_NAMESPACE, { timeoutMs: 5_000 })
 

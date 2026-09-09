@@ -20,19 +20,21 @@ import { buildHarnessExtraEnv } from '../src/main/harness-env.js';
 
 describe('bridge extraEnv plumbing', () => {
   it('includes both bridge env vars when the bridge is created', () => {
-    const env = buildHarnessExtraEnv({ endpoint: 'http://127.0.0.1:56789/pick-directory', token: 'a'.repeat(64) });
+    const env = buildHarnessExtraEnv({ endpoint: 'http://127.0.0.1:56789/pick-directory', fileOpenEndpoint: 'http://127.0.0.1:56789/open-text-file', token: 'a'.repeat(64) });
     expect(env.FREECODE_DIALOG_BRIDGE_ENDPOINT).toBe('http://127.0.0.1:56789/pick-directory');
     expect(env.FREECODE_DIALOG_BRIDGE_TOKEN).toHaveLength(64);
+    expect(env.FREECODE_FILE_OPEN_ENDPOINT).toBe('http://127.0.0.1:56789/open-text-file');
   });
 
   it('omits bridge env vars when the bridge is not available', () => {
     const env = buildHarnessExtraEnv(null);
     expect(env.FREECODE_DIALOG_BRIDGE_ENDPOINT).toBeUndefined();
     expect(env.FREECODE_DIALOG_BRIDGE_TOKEN).toBeUndefined();
+    expect(env.FREECODE_FILE_OPEN_ENDPOINT).toBeUndefined();
   });
 
   it('never forgets DSH_CLIENT_TITLE', () => {
-    for (const bridge of [null, { endpoint: 'x', token: 'y' }]) {
+    for (const bridge of [null, { endpoint: 'x', fileOpenEndpoint: 'y', token: 'z' }]) {
       const env = buildHarnessExtraEnv(bridge);
       expect(env.DSH_CLIENT_TITLE).toBe('FreeCode');
     }
@@ -44,7 +46,11 @@ const BUNDLE = resolve(
   '../../../vendor/deepseek-harness/packages/host/directory-picker-native/lib/index.js',
 );
 
-describe.runIf(existsSync(BUNDLE))('directory-picker-native bundle smoke', () => {
+describe('directory-picker-native bundle smoke', () => {
+  it('has a built bundle; release-critical tests must not silently skip it', () => {
+    expect(existsSync(BUNDLE), `missing compiled picker bundle: ${BUNDLE}`).toBe(true);
+  });
+
   it('contains the bridge env-var reference — protects against source/bundle drift', () => {
     const src = readFileSync(BUNDLE, 'utf8');
     expect(src).toContain('FREECODE_DIALOG_BRIDGE_ENDPOINT');

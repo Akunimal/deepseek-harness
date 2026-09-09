@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll } from 'vitest';
 import { spawn, spawnSync, ChildProcess } from 'node:child_process';
 import { existsSync, rmSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -32,7 +32,8 @@ describe('contract: opencode2api CLI flags', () => {
   const bin = roots
     .map((r) => join(r, binaryName))
     .find((b) => existsSync(b));
-  it.skipIf(!bin)('binary exposes -port/-password/-config (Go flag style)', () => {
+  beforeAll(() => expect(bin, 'missing Windows opencode2api binary; build/package the runtime before contract tests').toBeDefined());
+  it('binary exposes -port/-password/-config (Go flag style)', () => {
     const r = spawnSync(bin!, ['--help'], { encoding: 'utf8', timeout: 15_000 });
     expect(r.status).toBe(0);
     const help = r.stdout + r.stderr;

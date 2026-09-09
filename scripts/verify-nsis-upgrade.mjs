@@ -7,7 +7,7 @@
  */
 
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -22,6 +22,10 @@ if (process.platform !== 'win32') {
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const RELEASE_DIR = resolve(REPO_ROOT, 'apps/shell/release');
+const INSTALL_TIMEOUT_MS = Number(process.env.FREECODE_NSIS_SMOKE_TIMEOUT_MS ?? 1_800_000);
+if (!Number.isFinite(INSTALL_TIMEOUT_MS) || INSTALL_TIMEOUT_MS <= 0) {
+  throw new Error('verify-nsis-upgrade: FREECODE_NSIS_SMOKE_TIMEOUT_MS must be a positive number');
+}
 const rootPackage = JSON.parse(readFileSync(join(REPO_ROOT, 'package.json'), 'utf8'));
 const NEW_VERSION = rootPackage.version;
 const NEW_SETUP = join(RELEASE_DIR, `FreeCode-DeepSeek-Harness-${NEW_VERSION}-win-x64-setup.exe`);
@@ -92,7 +96,8 @@ const runSetup = async (setup, label, isComplete = layoutIsPopulated) => {
   // candidate and can take over 15 minutes to expand on a cold Windows
   // profile or slower temp volume. Match the clean-install smoke budget so
   // the upgrade gate does not misclassify healthy extraction as a timeout.
-  const deadline = Date.now() + 1_800_000;
+  const deadline = Date.now() + INSTALL_TIMEOUT_MS;
+  let completeSince = null;
   while (Date.now() < deadline) {
     if (spawnError) throw new Error(`${label} installer error: ${spawnError.message}`);
     if (child.exitCode !== null) {
@@ -101,18 +106,24 @@ const runSetup = async (setup, label, isComplete = layoutIsPopulated) => {
       return;
     }
     // One-click installers may keep the parent alive while RUN_AFTER_FINISH
-    // launches the app. Once extraction is complete, the layout is the
-    // contract we care about; stop only this installer process tree.
+    // launches the app. Once extraction is complete, give customInstall a
+    // short grace period to recreate shortcuts before stopping only this
+    // installer process tree.
     if (isComplete()) {
-      console.log(`verify-nsis-upgrade: ${label} payload extraction complete; closing installer process tree.`);
-      stopProcessTree(child.pid);
-      try { stopInstalledProcesses(installDir); } catch { /* the next phase will report a live process */ }
-      return;
+      completeSince ??= Date.now();
+      if (Date.now() - completeSince >= 15_000) {
+        console.log(`verify-nsis-upgrade: ${label} payload extraction complete; closing installer process tree.`);
+        stopProcessTree(child.pid);
+        try { stopInstalledProcesses(installDir); } catch { /* the next phase will report a live process */ }
+        return;
+      }
+    } else {
+      completeSince = null;
     }
     await new Promise((resolveDelay) => setTimeout(resolveDelay, 1000));
   }
   stopProcessTree(child.pid);
-  throw new Error(`${label} installer timed out after 1800 seconds`);
+  throw new Error(`${label} installer timed out after ${Math.round(INSTALL_TIMEOUT_MS / 1000)} seconds`);
 };
 
 const dsh = () => join(installDir, 'resources/freecode/dsh');
@@ -135,12 +146,21 @@ try {
   assertPopulated(STABLE_VERSION);
 
   const staleMarker = join(dsh(), 'packages', `.stale-${STABLE_VERSION}-payload-marker`);
+  const manifestPath = join(installDir, 'resources/freecode/runtime-manifest.json');
+  const previousManifestMtime = statSync(manifestPath).mtimeMs;
   const userDataMarker = join(installDir, 'user-data', 'must-survive-upgrade.txt');
   writeFileSync(staleMarker, 'old payload\n');
   mkdirSync(join(installDir, 'user-data'), { recursive: true });
   writeFileSync(userDataMarker, 'user data\n', 'utf8');
 
-  await runSetup(NEW_SETUP, NEW_VERSION, () => layoutIsPopulated() && !existsSync(staleMarker));
+  await runSetup(NEW_SETUP, NEW_VERSION, () => {
+    if (!layoutIsPopulated() || existsSync(staleMarker) || !existsSync(manifestPath)) return false;
+    try {
+      return statSync(manifestPath).mtimeMs !== previousManifestMtime;
+    } catch {
+      return false;
+    }
+  });
   assertPopulated(NEW_VERSION);
 
   await verifyInstalledRuntime({ installDir, label: `${NEW_VERSION} upgrade` });

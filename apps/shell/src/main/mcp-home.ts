@@ -8,32 +8,36 @@ export const MCP_MANAGED_PATCH_END = '# END FREECODE MANAGED MCP'
 
 const PROCESS_CWD = '$process.cwd'
 
-const SERVER_DEFINITIONS = [
+const BASE_SERVER_DEFINITIONS = [
   {
     id: 'serena',
     serverName: 'serena',
     transport: 'stdio',
     command: 'uvx',
-    args: ['--from', 'git+https://github.com/oraios/serena', 'serena', 'start-mcp-server', '--context', 'ide-assistant', '--project-from-cwd'],
+    // Do not pass --project-from-cwd here. The Electron harness cwd is DSH_HOME,
+    // not the user's workspace; Serena would walk up to a drive root and scan
+    // the entire disk before it can register its MCP tools. The MCP bridge
+    // activates the selected session workspace before each Serena call.
+    args: ['--from', 'git+https://github.com/oraios/serena', 'serena', 'start-mcp-server', '--context', 'claude-code'],
     cwd: PROCESS_CWD,
+    projectActivation: { toolName: 'activate_project', pathArgument: 'project' },
   },
   {
-    id: 'lsp-typescript',
-    serverName: 'lsp-typescript',
+    id: 'free-search',
+    serverName: 'free-search',
     transport: 'stdio',
-    command: 'mcp-language-server',
-    args: ['--workspace', PROCESS_CWD, '--lsp', 'typescript-language-server', '--', '--stdio'],
-    cwd: PROCESS_CWD,
-  },
-  {
-    id: 'lsp-python',
-    serverName: 'lsp-python',
-    transport: 'stdio',
-    command: 'mcp-language-server',
-    args: ['--workspace', PROCESS_CWD, '--lsp', 'pyright-langserver', '--', '--stdio'],
+    command: 'uvx',
+    args: ['free-search-mcp'],
     cwd: PROCESS_CWD,
   },
 ] as const
+
+export const SERVER_DEFINITIONS = BASE_SERVER_DEFINITIONS
+
+export interface EmbeddedMcpOptions {
+  /** Absolute uvx path selected by the Windows bootstrap, when available. */
+  uvxCommand?: string
+}
 
 interface ManagedMcpServer {
   id: string
@@ -42,6 +46,7 @@ interface ManagedMcpServer {
   command: string
   args: readonly string[]
   cwd: string
+  projectActivation?: { toolName: string, pathArgument: string }
 }
 
 interface EmbeddedMcpConfig {
@@ -53,22 +58,46 @@ export interface EmbeddedMcpState {
   configPath: string
   patchPath: string
   enabled: string[]
+  servers: Array<ManagedMcpServer & { enabled: boolean }>
 }
 
-function defaultConfig(): EmbeddedMcpConfig {
+function definitions(options: EmbeddedMcpOptions = {}): typeof BASE_SERVER_DEFINITIONS {
+  if (options.uvxCommand === undefined) return BASE_SERVER_DEFINITIONS
+  return BASE_SERVER_DEFINITIONS.map((server) => server.command === 'uvx'
+    ? { ...server, command: options.uvxCommand }
+    : server) as unknown as typeof BASE_SERVER_DEFINITIONS
+}
+
+function defaultConfig(options: EmbeddedMcpOptions = {}): EmbeddedMcpConfig {
   return {
     version: EMBEDDED_MCP_CONFIG_VERSION,
-    servers: SERVER_DEFINITIONS.map((server) => ({ ...server, enabled: true })),
+    servers: definitions(options).map((server) => ({ ...server, enabled: true })),
   }
 }
 
-function readConfig(path: string): EmbeddedMcpConfig {
-  if (!existsSync(path)) return defaultConfig()
+function persistedUvxCommand(raw: { servers?: unknown }): string | undefined {
+  if (!Array.isArray(raw.servers)) return undefined
+  const candidate = raw.servers.find((server) => (
+    typeof server === 'object' && server !== null
+    && (server as { id?: unknown }).id === 'serena'
+    && typeof (server as { command?: unknown }).command === 'string'
+  )) as { command?: string } | undefined
+  const command = candidate?.command
+  if (command === 'uvx') return undefined
+  if (typeof command !== 'string' || !command.toLowerCase().endsWith('uvx.exe')) return undefined
+  return existsSync(command) ? command : undefined
+}
+
+function readConfig(path: string, options: EmbeddedMcpOptions = {}): EmbeddedMcpConfig {
+  if (!existsSync(path)) return defaultConfig(options)
   try {
     const raw = JSON.parse(readFileSync(path, 'utf8')) as {
       version?: unknown
       servers?: unknown
     }
+    const resolvedOptions = options.uvxCommand === undefined
+      ? { uvxCommand: persistedUvxCommand(raw) }
+      : options
     const flags = new Map(
       Array.isArray(raw.servers)
         ? raw.servers
@@ -82,7 +111,7 @@ function readConfig(path: string): EmbeddedMcpConfig {
     )
     return {
       version: EMBEDDED_MCP_CONFIG_VERSION,
-      servers: SERVER_DEFINITIONS.map((server) => ({
+      servers: definitions(resolvedOptions).map((server) => ({
         ...server,
         enabled: flags.get(server.id) ?? true,
       })),
@@ -91,7 +120,7 @@ function readConfig(path: string): EmbeddedMcpConfig {
     // Preserve a malformed file before recovering to the safe, enabled catalog.
     const backup = `${path}.invalid-${Date.now()}`
     try { renameSync(path, backup) } catch { /* startup must remain available */ }
-    return defaultConfig()
+    return defaultConfig(options)
   }
 }
 
@@ -109,13 +138,22 @@ function renderManagedPatch(config: EmbeddedMcpConfig): string {
     lines.push(
       `- id: ${JSON.stringify(`freecode-mcp-${server.id}`)}`,
       '  name: "@deepseek-ai/dsh-mcp-client"',
-      `  disabled: ${server.enabled ? 'false' : 'true'}`,
+      // Electron's web runtime mounts these rows from the Standard agent
+      // preset. Keep the host rows disabled there so the same serverName is
+      // never registered twice; non-Electron dsh profiles still use this
+      // managed host overlay.
+      `  disabled: ${server.enabled ? "!!js process.env.FREECODE_WEB_MODE === '1'" : 'true'}`,
       '  config:',
       `    transport: ${JSON.stringify(server.transport)}`,
       `    serverName: ${JSON.stringify(server.serverName)}`,
       `    command: ${JSON.stringify(server.command)}`,
       `    args: [${server.args.map(yamlValue).join(', ')}]`,
       `    cwd: ${yamlValue(server.cwd)}`,
+      ...(server.projectActivation === undefined ? [] : [
+        '    projectActivation:',
+        `      toolName: ${JSON.stringify(server.projectActivation.toolName)}`,
+        `      pathArgument: ${JSON.stringify(server.projectActivation.pathArgument)}`,
+      ]),
       '    failOnStartupError: false',
       '    reconnect:',
       '      enabled: true',
@@ -126,6 +164,16 @@ function renderManagedPatch(config: EmbeddedMcpConfig): string {
   }
   lines.push(MCP_MANAGED_PATCH_END)
   return `${lines.join('\n')}\n`
+}
+
+/** Environment consumed by the product overlay in the Standard agent preset. */
+export function embeddedMcpEnvironment(state: EmbeddedMcpState): Record<string, string> {
+  const env: Record<string, string> = { FREECODE_WEB_MODE: '1' }
+  for (const server of state.servers) {
+    const key = `FREECODE_MCP_${server.id.replaceAll('-', '_').toUpperCase()}_ENABLED`
+    env[key] = String(server.enabled)
+  }
+  return env
 }
 
 function mergeManagedPatch(existing: string, generated: string): string {
@@ -146,12 +194,12 @@ function writeAtomic(path: string, contents: string): void {
  * Materialize the bundled MCP catalog on first boot and refresh only the
  * FreeCode-managed overlay on later boots. User patch rows remain untouched.
  */
-export function ensureEmbeddedMcpConfig(homeDir: string): EmbeddedMcpState {
+export function ensureEmbeddedMcpConfig(homeDir: string, options: EmbeddedMcpOptions = {}): EmbeddedMcpState {
   const configDir = join(homeDir, 'mcp')
   const configPath = join(configDir, 'servers.json')
   const patchPath = join(homeDir, 'cordis.patch.yml')
   mkdirSync(configDir, { recursive: true })
-  const config = readConfig(configPath)
+  const config = readConfig(configPath, options)
   writeAtomic(configPath, `${JSON.stringify(config, null, 2)}\n`)
   const existingPatch = existsSync(patchPath) ? readFileSync(patchPath, 'utf8') : ''
   writeAtomic(patchPath, mergeManagedPatch(existingPatch, renderManagedPatch(config)))
@@ -159,5 +207,25 @@ export function ensureEmbeddedMcpConfig(homeDir: string): EmbeddedMcpState {
     configPath,
     patchPath,
     enabled: config.servers.filter((server) => server.enabled).map((server) => server.id),
+    servers: config.servers.map((server) => ({ ...server, args: [...server.args] })),
+  }
+}
+
+/** Toggle one product-managed server and refresh only the managed patch block. */
+export function setEmbeddedMcpEnabled(homeDir: string, id: string, enabled: boolean, options: EmbeddedMcpOptions = {}): EmbeddedMcpState {
+  const state = ensureEmbeddedMcpConfig(homeDir, options)
+  const configPath = state.configPath
+  const config = readConfig(configPath, options)
+  const server = config.servers.find((candidate) => candidate.id === id)
+  if (server === undefined) throw new Error(`unknown embedded MCP server: ${id}`)
+  server.enabled = enabled
+  writeAtomic(configPath, `${JSON.stringify(config, null, 2)}\n`)
+  const existingPatch = existsSync(state.patchPath) ? readFileSync(state.patchPath, 'utf8') : ''
+  writeAtomic(state.patchPath, mergeManagedPatch(existingPatch, renderManagedPatch(config)))
+  return {
+    configPath,
+    patchPath: state.patchPath,
+    enabled: config.servers.filter((candidate) => candidate.enabled).map((candidate) => candidate.id),
+    servers: config.servers.map((candidate) => ({ ...candidate, args: [...candidate.args] })),
   }
 }

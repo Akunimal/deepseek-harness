@@ -117,7 +117,7 @@ export class LocalBashExecutor extends ShellExecutor {
     maxSpillBytes: z.number().default(DEFAULT_MAX_SPILL_BYTES),
     graceMs: z.number().default(DEFAULT_GRACE_MS),
     rtk: z.boolean().default(true),
-    caveman: z.boolean().default(false),
+    caveman: z.boolean().default(true),
   })
 
   /** The currently authoritative config: the settings section, or the composition entry. */

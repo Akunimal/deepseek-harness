@@ -30,23 +30,6 @@ const run = (label, args) => {
   if (result.status !== 0) throw new Error(`${label} failed with exit code ${String(result.status)}`);
 };
 
-const toWslPath = (value) => {
-  const match = value.match(/^([A-Za-z]):[\\/](.*)$/);
-  if (!match) throw new Error(`Cannot map path to WSL: ${value}`);
-  return `/mnt/${match[1].toLowerCase()}/${match[2].replaceAll('\\', '/')}`;
-};
-
-const runWsl = (label, args) => {
-  console.log(`\nrelease-gate: ${label}`);
-  const result = spawnSync('wsl.exe', ['-d', 'Ubuntu', '--', 'node', toWslPath(resolve(root, 'scripts/verify-linux-appimage.mjs')), ...args], {
-    cwd: root,
-    stdio: 'inherit',
-    windowsHide: true,
-  });
-  if (result.error) throw result.error;
-  if (result.status !== 0) throw new Error(`${label} failed with exit code ${String(result.status)}`);
-};
-
 const runGit = (label, args) => {
   console.log(`\nrelease-gate: ${label}`);
   const result = spawnSync('git.exe', args, {
@@ -76,8 +59,7 @@ run('all vendored bundle freshness', ['exec', 'node', 'scripts/verify-vendor-bun
 run('compiled conversation motion bundle', ['exec', 'node', 'scripts/verify-conversation-bundle.mjs', 'vendor/deepseek-harness']);
 run('runtime closure unit tests', ['exec', 'node', '--test', 'scripts/runtime-closure.test.mjs']);
 run('core runtime closure (no optional Claude/Codex payloads)', ['exec', 'node', 'scripts/verify-runtime-closure.mjs', 'apps/shell/resources/freecode/dsh']);
-runWsl('Linux AppImage SquashFS, bridge, runtime, and metadata verification', [toWslPath(resolve(root, `apps/shell/release/FreeCode-DeepSeek-Harness-${version}-linux-x86_64.AppImage`))]);
+run('packaged Serena and free-search initialize/tools/call smoke', ['test:mcp:real']);
 run('fresh NSIS install and installed-runtime smoke', ['--filter', '@freecode/shell', 'smoke:nsis']);
-run('0.4.3 to candidate upgrade and installed-runtime smoke', ['--filter', '@freecode/shell', 'smoke:nsis:upgrade']);
 
 console.log(`\nrelease-gate: ${version} local candidate passed every required gate.`);

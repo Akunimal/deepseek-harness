@@ -13,6 +13,8 @@
  */
 
 import { createHash } from 'node:crypto'
+import { realpathSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { isDeepStrictEqual } from 'node:util'
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { ListToolsResultSchema } from '@modelcontextprotocol/sdk/types.js'
@@ -25,6 +27,7 @@ import type { ToolDefinition, ToolExecution, ToolExecutionResult } from '@deepse
 import { assertSupportedJsonSchema } from '@deepseek-ai/dsh-tools'
 import type { JsonSchemaNode } from '@deepseek-ai/dsh-tools'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
+import type { ProjectActivationConfig } from './index.ts'
 
 /** Resolved options relevant to tool bridging. */
 export interface ToolBridgeOptions {
@@ -32,6 +35,75 @@ export interface ToolBridgeOptions {
   registrationFailure: 'contain' | 'throw'
   serverName: string
   toolCallTimeoutMs: number
+  /** Optional contract for servers with one active project at a time. */
+  projectActivation?: ProjectActivationConfig
+  /** Connection-owned state shared by all tools and sync generations. */
+  projectActivationState?: ProjectActivationState
+}
+
+/** Stable outcome taxonomy emitted for every MCP tool invocation. */
+export type ToolCallStatus =
+  | 'success'
+  | 'failed-local'
+  | 'failed-mcp'
+  | 'failed-provider'
+  | 'failed-timeout'
+  | 'failed-permission'
+  | 'failed-invalid-response'
+
+class ToolCallFailure extends Error {
+  constructor(message: string, readonly status: Exclude<ToolCallStatus, 'success'>) {
+    super(message)
+    this.name = 'ToolCallFailure'
+  }
+}
+
+function classifyToolCallFailure(error: unknown): Exclude<ToolCallStatus, 'success'> {
+  if (error instanceof ToolCallFailure) return error.status
+  const message = error instanceof Error ? error.message : String(error)
+  if (/timed? out|timeout|aborted|cancell?ed/i.test(message)) return 'failed-timeout'
+  if (/permission|access denied|not allowed|sandbox|forbidden/i.test(message)) return 'failed-permission'
+  if (/provider|upstream|429|rate.?limit|api key|authentication/i.test(message)) return 'failed-provider'
+  if (/schema|invalid response|empty|no output|malformed|expected (?:an )?object/i.test(message)) return 'failed-invalid-response'
+  if (/mcp|json-?rpc|connection|transport|server|tools\/(?:list|call)/i.test(message)) return 'failed-mcp'
+  return 'failed-local'
+}
+
+function logToolCall(
+  ctx: Context,
+  opts: ToolBridgeOptions,
+  rawName: string,
+  requestId: string,
+  attempt: number,
+  startedAt: number,
+  status: ToolCallStatus,
+  error?: unknown,
+): void {
+  const record = {
+    requestId,
+    server: opts.serverName,
+    tool: rawName,
+    attempt,
+    status,
+    durationMs: Math.max(0, Math.round(performance.now() - startedAt)),
+    ...error === undefined ? {} : { error: error instanceof Error ? error.message.slice(0, 1_024) : String(error).slice(0, 1_024) },
+  }
+  // Keep the contract machine-readable while avoiding model arguments or
+  // image payloads in logs. One invocation produces exactly one record.
+  const line = `mcp tool call ${JSON.stringify(record)}`
+  if (status === 'success') ctx.logger.info(line)
+  else ctx.logger.error(line)
+}
+
+/** Mutable connection state used to serialize activation with the tool call. */
+export interface ProjectActivationState {
+  chain: Promise<void>
+  activeProject: string | undefined
+}
+
+/** Create fresh activation state for one MCP connection supervisor. */
+export function createProjectActivationState(): ProjectActivationState {
+  return { chain: Promise.resolve(), activeProject: undefined }
 }
 
 /** State for one sync generation: the current set of disposers keyed by public name. */
@@ -82,17 +154,91 @@ function callToolUncached(
   client: Client,
   rawName: string,
   args: Record<string, unknown>,
-  exec: ToolExecution,
+  signal: AbortSignal,
   opts: ToolBridgeOptions,
 ) {
   return client.request(
     { method: 'tools/call', params: { name: rawName, arguments: args } },
     RawCallToolResultSchema,
     {
-      signal: exec.signal,
+      signal,
       timeout: opts.toolCallTimeoutMs,
     },
   )
+}
+
+/** Canonicalize a workspace without making a missing/deleted workspace fatal. */
+export function canonicalProjectPath(project: string): string {
+  const absolute = resolve(project)
+  try { return realpathSync.native(absolute) } catch { return absolute }
+}
+
+/** Resolve the immutable, canonical workspace selected for the calling session. */
+function projectPathFor(exec: ToolExecution): string | undefined {
+  const cwd = exec.agent?.session.header?.cwd
+  return typeof cwd === 'string' && cwd.length > 0 ? canonicalProjectPath(cwd) : undefined
+}
+
+/** Extract a bounded, model-visible diagnostic from a failed activation call. */
+function activationFailure(result: Record<string, unknown>, toolName: string): Error {
+  let detail = 'the MCP server returned an error'
+  if (Array.isArray(result.content)) {
+    detail = extractText(result.content as unknown as JsonValue[], toolName).slice(0, 1_024)
+  } else if ('toolResult' in result) {
+    try { detail = JSON.stringify(result.toolResult).slice(0, 1_024) } catch { /* retain stable fallback */ }
+  }
+  return new Error(`project activation via MCP tool "${toolName}" failed: ${detail}`)
+}
+
+/**
+ * Call one MCP tool, activating the selected session workspace immediately
+ * before it when the server declares a project activation contract.
+ *
+ * Serena keeps one active project in one long-lived process. The activation
+ * and the dependent call therefore share one serialized queue; activating in
+ * a separate fire-and-forget request would let concurrent sessions switch the
+ * global project between those two requests.
+ */
+function callToolWithProjectActivation(
+  client: Client,
+  rawName: string,
+  args: Record<string, unknown>,
+  exec: ToolExecution,
+  opts: ToolBridgeOptions,
+): Promise<Record<string, unknown>> {
+  const activation = opts.projectActivation
+  const state = opts.projectActivationState
+  const project = projectPathFor(exec)
+  if (activation === undefined || state === undefined || project === undefined) {
+    return callToolUncached(client, rawName, args, exec.signal, opts)
+  }
+
+  const run = state.chain.catch(() => {}).then(async () => {
+    exec.signal.throwIfAborted()
+    if (rawName !== activation.toolName && state.activeProject !== project) {
+      const activated = await callToolUncached(
+        client,
+        activation.toolName,
+        { [activation.pathArgument]: project },
+        exec.signal,
+        opts,
+      )
+      if (activated.isError === true) throw activationFailure(activated, activation.toolName)
+      state.activeProject = project
+    }
+
+    const result = await callToolUncached(client, rawName, args, exec.signal, opts)
+    // A manual activate_project call remains supported and updates the local
+    // cache only after the server accepted it.
+    if (rawName === activation.toolName && result.isError !== true) {
+      const requested = args[activation.pathArgument]
+      if (typeof requested === 'string' && requested.length > 0) state.activeProject = requested
+    }
+    return result
+  })
+  // A failed call must not poison later independent calls in the same server.
+  state.chain = run.then(() => undefined, () => undefined)
+  return run
 }
 
 /**
@@ -147,6 +293,11 @@ export async function syncTools(
   opts: ToolBridgeOptions,
   previous: ToolDisposers,
 ): Promise<ToolDisposers> {
+  // Tests and programmatic callers may omit the internal state. The
+  // connection supervisor supplies one that survives tool-list re-syncs.
+  const bridgeOpts = opts.projectActivation !== undefined && opts.projectActivationState === undefined
+    ? { ...opts, projectActivationState: createProjectActivationState() }
+    : opts
   // Phase 1: fetch and build the next generation without touching the registry.
   const definitions = new Map<string, ToolDefinition>()
   let cursor: string | undefined
@@ -168,7 +319,7 @@ export async function syncTools(
         tool.inputSchema,
         supportedOutputSchema(tool.outputSchema),
         tool.execution?.taskSupport === 'required',
-        opts,
+        bridgeOpts,
       ))
     }
     cursor = response.nextCursor
@@ -310,54 +461,85 @@ function createExecutor(
   projections: WeakMap<ToolExecution, PreparedProjection>,
 ): ToolDefinition['execute'] {
   return async (args: unknown, exec: ToolExecution) => {
-    if (taskRequired) {
-      throw new Error(`Tool "${rawName}" requires task-based execution, which this bridge does not support`)
-    }
-    // The agent loop passes `JSON.parse(model_arguments)` which is usually an
-    // object, but can be any JSON value if the model misbehaves (outputs a bare
-    // string/number/null). Fallback to {} lets the MCP server produce a
-    // specific "missing required param" error the model can learn from.
-    const argsObj = (typeof args === 'object' && args !== null ? args : {}) as Record<string, unknown>
-    const result = await callToolUncached(client, rawName, argsObj, exec, opts)
+    const requestId = String(exec.callId ?? 'unknown')
+    const startedAt = performance.now()
+    let status: ToolCallStatus = 'success'
+    let failure: unknown
+    try {
+      if (taskRequired) {
+        throw new ToolCallFailure(
+          `Tool "${rawName}" requires task-based execution, which this bridge does not support`,
+          'failed-local',
+        )
+      }
+      // The agent loop passes `JSON.parse(model_arguments)` which is usually an
+      // object, but can be any JSON value if the model misbehaves (outputs a bare
+      // string/number/null). Fallback to {} lets the MCP server produce a
+      // specific "missing required param" error the model can learn from.
+      const argsObj = (typeof args === 'object' && args !== null ? args : {}) as Record<string, unknown>
+      const result = await callToolWithProjectActivation(client, rawName, argsObj, exec, opts)
 
-    // The SDK may return a legacy `toolResult` shape; normalize to content array.
-    if (!Array.isArray(result.content)) {
-      const rendered: unknown = 'toolResult' in result
-        ? JSON.stringify(result.toolResult)
-        : '(no output)'
-      const text = typeof rendered === 'string' ? rendered : '(no output)'
-      if (result.isError === true) throw new Error(text)
-      return {
-        content: [{ type: 'text', text }],
+      // The SDK may return a legacy `toolResult` shape; normalize to content array.
+      if (!Array.isArray(result.content)) {
+        if (result.isError === true) {
+          const renderedError = 'toolResult' in result ? JSON.stringify(result.toolResult) : undefined
+          throw new ToolCallFailure(
+            typeof renderedError === 'string' && renderedError.length > 0
+              ? renderedError
+              : `${rawName} returned an MCP error without content`,
+            'failed-mcp',
+          )
+        }
+        if (!('toolResult' in result)) {
+          throw new ToolCallFailure(`${rawName} returned an invalid response without content`, 'failed-invalid-response')
+        }
+        const rendered: unknown = JSON.stringify(result.toolResult)
+        if (typeof rendered !== 'string' || rendered.length === 0) {
+          throw new ToolCallFailure(`${rawName} returned an empty MCP response`, 'failed-invalid-response')
+        }
+        const text = rendered
+        return {
+          content: [{ type: 'text', text }],
+          ...result.structuredContent !== undefined
+            ? { structuredContent: result.structuredContent as JsonValue }
+            : {},
+        }
+      }
+
+      // Trust boundary: the SDK's return type erases to `any[]` due to the
+      // union of CallToolResult | CompatibilityCallToolResult; extractText
+      // validates each element.
+      const content = result.content as unknown as JsonValue[]
+      if (result.isError === true) {
+        throw new ToolCallFailure(
+          content.length > 0 ? extractText(content, rawName) : `${rawName} returned an MCP error without content`,
+          'failed-mcp',
+        )
+      }
+      if (content.length === 0) {
+        throw new ToolCallFailure(`${rawName} returned an empty MCP response`, 'failed-invalid-response')
+      }
+      const text = extractText(content, rawName)
+
+      const value: McpResult = {
+        content,
         ...result.structuredContent !== undefined
           ? { structuredContent: result.structuredContent as JsonValue }
           : {},
       }
+      if (containsImage(content)) {
+        const fallback: ContentBlock[] = [{ type: 'text', text }]
+        const projected = await prepareImageProjection(ctx, exec, content, rawName)
+        projections.set(exec, { value, fallback, content: projected })
+      }
+      return value
+    } catch (error: unknown) {
+      status = classifyToolCallFailure(error)
+      failure = error
+      throw error
+    } finally {
+      logToolCall(ctx, opts, rawName, requestId, 1, startedAt, status, failure)
     }
-
-    // Trust boundary: the SDK's return type erases to `any[]` due to the
-    // union of CallToolResult | CompatibilityCallToolResult; extractText
-    // validates each element.
-    const content = result.content as unknown as JsonValue[]
-    const text = extractText(content, rawName)
-
-    // MCP isError → throw so ToolRuntime produces an isError result for the model.
-    if (result.isError === true) {
-      throw new Error(text)
-    }
-
-    const value: McpResult = {
-      content,
-      ...result.structuredContent !== undefined
-        ? { structuredContent: result.structuredContent as JsonValue }
-        : {},
-    }
-    if (containsImage(content)) {
-      const fallback: ContentBlock[] = [{ type: 'text', text: extractText(content, rawName) }]
-      const projected = await prepareImageProjection(ctx, exec, content, rawName)
-      projections.set(exec, { value, fallback, content: projected })
-    }
-    return value
   }
 }
 

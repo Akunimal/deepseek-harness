@@ -38,6 +38,20 @@ const DEFAULT_TOOL_CALL_TIMEOUT_MS = 60_000
 const SERVER_NAME_PATTERN = /^[A-Za-z0-9_-]{1,32}$/
 
 /**
+ * Optional per-session project activation for MCP servers whose state is
+ * scoped to one active workspace (for example Serena).
+ *
+ * The bridge supplies the selected session cwd immediately before a tool call;
+ * it never derives a project from the MCP child process cwd.
+ */
+export interface ProjectActivationConfig {
+  /** Raw MCP tool that activates one project. */
+  toolName: string
+  /** Required string argument receiving the selected session cwd. */
+  pathArgument: string
+}
+
+/**
  * Live `serverName` reservations per registration scope. Agent-scoped MCP
  * servers may reuse a namespace in another Agent, while global instances and
  * duplicates inside one Agent remain mutually exclusive.
@@ -70,6 +84,8 @@ export interface StdioConfig {
   failOnStartupError: boolean
   /** Automatic reconnect policy after a lost connection; omission uses the defaults. */
   reconnect?: ReconnectConfig
+  /** Optional automatic project activation contract for this MCP server. */
+  projectActivation?: ProjectActivationConfig
 }
 
 /** Config for connecting to an MCP server over Streamable HTTP (SSE). */
@@ -92,6 +108,8 @@ export interface StreamableHttpConfig {
   failOnStartupError: boolean
   /** Automatic reconnect policy after a lost connection; omission uses the defaults. */
   reconnect?: ReconnectConfig
+  /** Optional automatic project activation contract for this MCP server. */
+  projectActivation?: ProjectActivationConfig
 }
 
 /** Configuration for one stdio or Streamable HTTP MCP server. */
@@ -110,6 +128,16 @@ const Reconnect: z<ReconnectConfig> = z.object({
   maxAttempts: z.number().step(1).min(1).max(Number.MAX_SAFE_INTEGER).default(RECONNECT_DEFAULTS.maxAttempts),
 })
 
+const PROJECT_ACTIVATION_NAME = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/
+const ProjectActivation: z<ProjectActivationConfig> = z.object({
+  toolName: z.string().required().pattern(PROJECT_ACTIVATION_NAME),
+  pathArgument: z.string().required().pattern(PROJECT_ACTIVATION_NAME),
+})
+const OptionalProjectActivation: z<ProjectActivationConfig | undefined> = z.union([
+  ProjectActivation,
+  z.const(undefined),
+])
+
 export const Config = z.union([
   z.object({
     transport: z.const('stdio'),
@@ -121,6 +149,7 @@ export const Config = z.union([
     toolCallTimeoutMs: z.number().default(DEFAULT_TOOL_CALL_TIMEOUT_MS),
     failOnStartupError: z.boolean().default(false),
     reconnect: Reconnect,
+    projectActivation: OptionalProjectActivation,
   }),
   z.object({
     transport: z.const('streamable-http'),
@@ -130,6 +159,7 @@ export const Config = z.union([
     toolCallTimeoutMs: z.number().default(DEFAULT_TOOL_CALL_TIMEOUT_MS),
     failOnStartupError: z.boolean().default(false),
     reconnect: Reconnect,
+    projectActivation: OptionalProjectActivation,
   }),
 ]) as unknown as z<ConfigInput, Config>
 

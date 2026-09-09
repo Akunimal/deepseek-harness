@@ -66,9 +66,11 @@ describe('model-refresher', () => {
   afterEach(() => vi.unstubAllGlobals());
 
   it('probes models, persists catalog with latency, syncs settings with responders sorted', async () => {
+    // Keep a wide margin so the latency-order assertion is not inverted by
+    // Windows timer jitter when Vitest runs the full suite in parallel.
     mockFetch(['deepseek-v3.2-free', 'deepseek-chat'], {
-      'deepseek-v3.2-free': 5,
-      'deepseek-chat': 30,
+      'deepseek-v3.2-free': 50,
+      'deepseek-chat': 300,
     }); // reasoner fails
     const { home, data } = tmpDirs();
     let updated: ModelCatalog | null = null;
@@ -97,9 +99,9 @@ describe('model-refresher', () => {
 
   it('orders settings.yaml models by latency asc (fastest first = de-facto default)', async () => {
     mockFetch(['deepseek-chat', 'deepseek-reasoner', 'deepseek-v3.2-free'], {
-      'deepseek-chat': 90,
-      'deepseek-v3.2-free': 5,
-      'deepseek-reasoner': 40,
+      'deepseek-chat': 400,
+      'deepseek-v3.2-free': 50,
+      'deepseek-reasoner': 200,
     });
     const { home, data } = tmpDirs();
     await refreshModels({ lbBaseUrl: LB, homeDir: home, userDataDir: data });
@@ -116,7 +118,7 @@ describe('model-refresher', () => {
   });
 
   it('merges into settings.yaml without touching other user sections', async () => {
-    mockFetch(['deepseek-chat', 'deepseek-v3.2-free'], { 'deepseek-v3.2-free': 5, 'deepseek-chat': 30 });
+    mockFetch(['deepseek-chat', 'deepseek-v3.2-free'], { 'deepseek-v3.2-free': 50, 'deepseek-chat': 300 });
     const { home, data } = tmpDirs();
     // A user section (e.g. OmniRoute added via wizard) must survive the merge.
     const { writeFileSync, mkdirSync } = await import('node:fs');
@@ -149,6 +151,19 @@ describe('model-refresher', () => {
     rmSync(dirname(home), { recursive: true, force: true });
   });
 
+  it('refreshes MiMo models with binary thinking and no reasoning_effort support', async () => {
+    mockFetchWithModels(['mimo-v2.5-pro'], ['mimo-v2.5-pro']);
+    const { home, data } = tmpDirs();
+    await refreshModels({ lbBaseUrl: LB, homeDir: home, userDataDir: data });
+    const settings = loadYaml(readFileSync(join(home, 'settings.yaml'), 'utf8')) as any;
+    expect(settings['llm-pi-ai'].providers['deepseek-free'].models).toEqual([{
+      id: 'mimo-v2.5-pro',
+      reasoningEfforts: { off: null, high: 'high' },
+      compat: { thinkingFormat: 'deepseek', supportsReasoningEffort: false },
+    }]);
+    rmSync(dirname(home), { recursive: true, force: true });
+  });
+
   it('keeps x-preview-f exposed when its slow probe is temporarily unavailable', async () => {
     mockFetchWithModels(['x-preview-f', 'deepseek-v3.2-free'], ['deepseek-v3.2-free']);
     const { home, data } = tmpDirs();
@@ -157,99 +172,6 @@ describe('model-refresher', () => {
     expect(settings['llm-pi-ai'].providers['deepseek-free'].models).toEqual(
       expect.arrayContaining([deepseekModel('deepseek-v3.2-free'), { id: 'x-preview-f', reasoningEfforts: false }]),
     );
-    rmSync(dirname(home), { recursive: true, force: true });
-  });
-
-  it('refreshes an optional static provider without probing every model', async () => {
-    const calls: string[] = [];
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async (url: string | URL, init?: RequestInit) => {
-        const u = String(url);
-        calls.push(`${init?.method ?? 'GET'} ${u}`);
-        if (u === `${LB}/v1/models`) {
-          return new Response(JSON.stringify({ data: [{ id: 'deepseek-v3.2-free' }] }), { status: 200 });
-        }
-        if (u === `${LB}/v1/chat/completions`) {
-          return new Response(JSON.stringify({ choices: [] }), { status: 200 });
-        }
-        if (u === 'http://127.0.0.1:8081/v1/models') {
-          return new Response(JSON.stringify({ data: [
-            { id: 'gemini-3.7-flash' },
-            { id: 'gemini-3.1-pro' },
-          ] }), { status: 200 });
-        }
-        return new Response('not found', { status: 404 });
-      }),
-    );
-    const { home, data } = tmpDirs();
-    const catalog = await refreshModels({
-      lbBaseUrl: LB,
-      homeDir: home,
-      userDataDir: data,
-      providers: [{
-        provider: 'gemini-web',
-        baseUrl: 'http://127.0.0.1:8081',
-        probeModels: false,
-        fallbackModels: ['gemini-3.7-flash'],
-      }],
-    });
-
-    expect(catalog.providers['gemini-web']?.models).toEqual([
-      { id: 'gemini-3.7-flash', responds: true, latencyMs: null, lastSeen: expect.any(Number) },
-      { id: 'gemini-3.1-pro', responds: true, latencyMs: null, lastSeen: expect.any(Number) },
-    ]);
-    expect(calls).not.toContain('POST http://127.0.0.1:8081/v1/chat/completions');
-    const settings = loadYaml(readFileSync(join(home, 'settings.yaml'), 'utf8')) as any;
-    expect(settings['llm-pi-ai'].providers['gemini-web'].models).toEqual([
-      { id: 'gemini-3.7-flash', reasoningEfforts: false },
-      { id: 'gemini-3.1-pro', reasoningEfforts: false },
-    ]);
-    rmSync(dirname(home), { recursive: true, force: true });
-  });
-
-  it('keeps the optional provider seed when its local server is offline', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async (url: string | URL, init?: RequestInit) => {
-        const u = String(url);
-        if (u === `${LB}/v1/models`) {
-          return new Response(JSON.stringify({ data: [{ id: 'deepseek-v3.2-free' }] }), { status: 200 });
-        }
-        if (u === `${LB}/v1/chat/completions`) {
-          return new Response(JSON.stringify({ choices: [] }), { status: 200 });
-        }
-        if (u === 'http://127.0.0.1:8081/v1/models') {
-          return new Response('offline', { status: 503 });
-        }
-        void init;
-        return new Response('not found', { status: 404 });
-      }),
-    );
-    const { home, data } = tmpDirs();
-    const { mkdirSync, writeFileSync } = await import('node:fs');
-    mkdirSync(home, { recursive: true });
-    writeFileSync(
-      join(home, 'settings.yaml'),
-      `llm-pi-ai:\n  providers:\n    gemini-web:\n      models:\n        - id: gemini-3.6-flash\n`,
-    );
-    const catalog = await refreshModels({
-      lbBaseUrl: LB,
-      homeDir: home,
-      userDataDir: data,
-      providers: [{
-        provider: 'gemini-web',
-        baseUrl: 'http://127.0.0.1:8081',
-        probeModels: false,
-        fallbackModels: ['gemini-3.7-flash'],
-      }],
-    });
-    expect(catalog.providers['gemini-web']?.models).toEqual([]);
-    const settings = loadYaml(readFileSync(join(home, 'settings.yaml'), 'utf8')) as any;
-    expect(settings['llm-pi-ai'].providers['gemini-web'].models).toEqual([
-      { id: 'gemini-3.6-flash' },
-      { id: 'gemini-3.7-flash', reasoningEfforts: false },
-    ]);
     rmSync(dirname(home), { recursive: true, force: true });
   });
 

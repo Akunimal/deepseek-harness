@@ -7,6 +7,8 @@ import type {
   WorkerHandle,
   TorInstance,
   OcrResult,
+  EmbeddedMcpState,
+  McpRuntimeStatus,
 } from '@freecode/shared-types';
 
 const IpcChannels = {
@@ -17,6 +19,10 @@ const IpcChannels = {
   modelsRefresh: 'models:refresh',
   omnirouteDetect: 'omniroute:detect',
   settingsOpenFolder: 'settings:openFolder',
+  mcpGetState: 'mcp:getState',
+  mcpSetEnabled: 'mcp:setEnabled',
+  mcpOpenConfig: 'mcp:openConfig',
+  mcpStatus: 'mcp:status',
   harnessRestart: 'harness:restart',
   torfleetEnable: 'torfleet:enable',
   torfleetStatus: 'torfleet:status',
@@ -59,6 +65,17 @@ const api: FreeCodeApi = {
   settings: {
     openFolder: (): Promise<void> => ipcRenderer.invoke(IpcChannels.settingsOpenFolder),
   },
+  mcp: {
+    getState: (): Promise<EmbeddedMcpState> => ipcRenderer.invoke(IpcChannels.mcpGetState),
+    setEnabled: (id: string, enabled: boolean): Promise<EmbeddedMcpState> =>
+      ipcRenderer.invoke(IpcChannels.mcpSetEnabled, { id, enabled }),
+    openConfig: (): Promise<void> => ipcRenderer.invoke(IpcChannels.mcpOpenConfig),
+    onStatus(cb: (status: McpRuntimeStatus) => void): () => void {
+      const listener = (_e: unknown, status: McpRuntimeStatus): void => cb(status);
+      ipcRenderer.on(IpcChannels.mcpStatus, listener);
+      return () => ipcRenderer.removeListener(IpcChannels.mcpStatus, listener);
+    },
+  },
   torfleet: {
     enable: (on: boolean): Promise<void> =>
       ipcRenderer.invoke(IpcChannels.torfleetEnable, { enabled: on }),
@@ -85,4 +102,4 @@ const api: FreeCodeApi = {
 
 contextBridge.exposeInMainWorld('freecode', api);
 
-export type { FreeCodeApi, IpcPayloads, ModelCatalog, DetectedRoute, WorkerHandle, TorInstance, OcrResult };
+export type { FreeCodeApi, IpcPayloads, ModelCatalog, DetectedRoute, WorkerHandle, TorInstance, OcrResult, EmbeddedMcpState, McpRuntimeStatus };

@@ -30,27 +30,11 @@ describe('provider-seeder', () => {
     expect(p.compat).toEqual({ thinkingFormat: 'deepseek' });
     // reasoning removed from provider level — each model carries its own capability.
     expect(p.reasoning).toBeUndefined();
-    const gemini = settings['llm-pi-ai'].providers['gemini-web'];
-    expect(gemini.displayName).toBe('Gemini Web (local — text-only queries)');
-    expect(gemini.api).toBe('openai-completions');
-    expect(gemini.baseURL).toBe('http://127.0.0.1:8081/v1');
-    expect(gemini.headers).toEqual({ Authorization: 'Bearer freecode-local' });
-    expect(gemini.defaultInput).toEqual(['text']);
-    expect(gemini.models).toEqual([
-      { id: 'gemini-3.7-flash', reasoningEfforts: false },
-      { id: 'gemini-3.6-flash', reasoningEfforts: false },
-      { id: 'gemini-3.5-flash', reasoningEfforts: false },
-      { id: 'gemini-3.5-flash-thinking', reasoningEfforts: { off: null, low: 'low', high: 'high' } },
-      { id: 'gemini-3.1-pro', reasoningEfforts: false },
-      { id: 'gemini-3.1-pro-enhanced', reasoningEfforts: false },
-      { id: 'gemini-auto', reasoningEfforts: false },
-      { id: 'gemini-3.5-flash-thinking-lite', reasoningEfforts: { off: null, low: 'low', high: 'high' } },
-      { id: 'gemini-flash-lite', reasoningEfforts: false },
-    ]);
-    // Provider insertion order is the selector order after the built-in pool.
+    expect(settings['llm-pi-ai'].providers['gemini-web']).toBeUndefined();
+    // Provider insertion order contains only the built-in pool after the
+    // managed Gemini migration has run.
     expect(Object.keys(settings['llm-pi-ai'].providers)).toEqual([
       'deepseek-free',
-      'gemini-web',
     ]);
     // Marker written for the versioned seed.
     expect(existsSync(join(home, '.freecode-seeded-v1'))).toBe(true);
@@ -119,34 +103,7 @@ llm-pi-ai:
     rmSync(home, { recursive: true, force: true });
   });
 
-  it('preserves user customizations on the Gemini route', () => {
-    const home = tmpHome();
-    const path = join(home, 'settings.yaml');
-    writeFileSync(path, `
-llm-pi-ai:
-  providers:
-    gemini-web:
-      displayName: My Gemini Gateway
-      api: openai-completions
-      baseURL: http://127.0.0.1:9999/v1
-      apiKeyEnv: GEMINI_WEB2API_API_KEY
-      models:
-        - id: custom-model
-`);
-
-    seedProviders({ homeDir: home, lbBaseUrl: LB });
-    const settings = loadYaml(readFileSync(path, 'utf8')) as any;
-    expect(settings['llm-pi-ai'].providers['gemini-web']).toEqual({
-      displayName: 'My Gemini Gateway',
-      api: 'openai-completions',
-      baseURL: 'http://127.0.0.1:9999/v1',
-      apiKeyEnv: 'GEMINI_WEB2API_API_KEY',
-      models: [{ id: 'custom-model' }],
-    });
-    rmSync(home, { recursive: true, force: true });
-  });
-
-  it('migrates existing keyless local routes with the internal auth header', () => {
+  it('removes the old managed Gemini route without touching unrelated providers', () => {
     const home = tmpHome();
     const path = join(home, 'settings.yaml');
     writeFileSync(path, `
@@ -158,13 +115,24 @@ llm-pi-ai:
       baseURL: http://127.0.0.1:8081/v1
       models:
         - id: gemini-3.7-flash
+    custom-provider:
+      displayName: My Gateway
+      api: openai-completions
+      baseURL: http://127.0.0.1:9999/v1
+      models:
+        - id: custom-model
 `);
 
     const { seeded } = seedProviders({ homeDir: home, lbBaseUrl: LB });
     expect(seeded).toBe(true);
     const settings = loadYaml(readFileSync(path, 'utf8')) as any;
-    expect(settings['llm-pi-ai'].providers['gemini-web'].headers)
-      .toEqual({ Authorization: 'Bearer freecode-local' });
+    expect(settings['llm-pi-ai'].providers['gemini-web']).toBeUndefined();
+    expect(settings['llm-pi-ai'].providers['custom-provider']).toEqual({
+      displayName: 'My Gateway',
+      api: 'openai-completions',
+      baseURL: 'http://127.0.0.1:9999/v1',
+      models: [{ id: 'custom-model' }],
+    });
     rmSync(home, { recursive: true, force: true });
   });
 
@@ -238,6 +206,36 @@ agent-default-model:
     expect(provider.reasoning).toBeUndefined();
     expect(provider.models).toEqual([{ id: 'x-preview-f', reasoningEfforts: false }]);
     expect(settings['agent-default-model']).toEqual({ provider: 'deepseek-free', model: 'x-preview-f' });
+    rmSync(home, { recursive: true, force: true });
+  });
+
+  it('normalizes MiMo V2.5 to binary thinking and its DeepSeek wire dialect', () => {
+    const home = tmpHome();
+    const path = join(home, 'settings.yaml');
+    writeFileSync(path, `
+llm-pi-ai:
+  providers:
+    deepseek-free:
+      api: openai-completions
+      baseURL: ${LB}/v1
+      models:
+        - id: mimo-v2.5
+          reasoningEfforts:
+            off:
+            low: low
+            high: high
+          compat:
+            thinkingFormat: deepseek
+`);
+
+    seedProviders({ homeDir: home, lbBaseUrl: LB });
+    const settings = loadYaml(readFileSync(path, 'utf8')) as any;
+    const model = settings['llm-pi-ai'].providers['deepseek-free'].models[0];
+    expect(model.reasoningEfforts).toEqual({ off: null, high: 'high' });
+    expect(model.compat).toEqual({
+      thinkingFormat: 'deepseek',
+      supportsReasoningEffort: false,
+    });
     rmSync(home, { recursive: true, force: true });
   });
 });

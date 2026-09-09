@@ -35,6 +35,10 @@ if (process.platform !== 'win32') {
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const RELEASE_DIR = resolve(REPO_ROOT, 'apps/shell/release');
+const INSTALL_TIMEOUT_MS = Number(process.env.FREECODE_NSIS_SMOKE_TIMEOUT_MS ?? 1_800_000);
+if (!Number.isFinite(INSTALL_TIMEOUT_MS) || INSTALL_TIMEOUT_MS <= 0) {
+  throw new Error('verify-nsis-install-layout: FREECODE_NSIS_SMOKE_TIMEOUT_MS must be a positive number');
+}
 if (!existsSync(RELEASE_DIR)) {
   console.error(`verify-nsis-install-layout: release dir missing: ${RELEASE_DIR}`);
   process.exit(2);
@@ -79,7 +83,7 @@ try {
     // The 1+ GB unpacked runtime can take many minutes on a cold Windows
     // profile or slower temp volume. Keep this generous: a timeout here must
     // not misclassify a healthy extraction as an installer failure.
-    timeout: 1_800_000,
+    timeout: INSTALL_TIMEOUT_MS,
   });
   if (install.error) {
     console.error(`verify-nsis-install-layout: installer error ${install.error.message}`);

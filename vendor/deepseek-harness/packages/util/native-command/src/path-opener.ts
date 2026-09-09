@@ -22,7 +22,8 @@ export interface PathOpenerInternals {
   /** Kernel release override used to distinguish WSL from desktop Linux. */
   osRelease?: string
   /** Environment used for WSL markers and the desktop Linux browser convention. */
-  env?: NodeJS.ProcessEnv
+  /** Environment used for WSL markers, desktop conventions, and the optional Electron bridge. */
+  env?: NodeJS.ProcessEnv & Partial<Record<'FREECODE_FILE_OPEN_ENDPOINT' | 'FREECODE_DIALOG_BRIDGE_TOKEN', string>>
   run?: PathOpenerRunner
 }
 
@@ -107,6 +108,24 @@ async function openWindowsPath(path: string, signal: AbortSignal, run: PathOpene
   ], signal)
 }
 
+/** Open settings through the authenticated Electron shell bridge when present. */
+async function openViaElectronBridge(
+  endpoint: string, token: string, path: string, signal: AbortSignal,
+): Promise<void> {
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: { 'x-freecode-dialog-token': token, 'content-type': 'application/json' },
+    body: JSON.stringify({ path }),
+    signal,
+  })
+  if (!response.ok) {
+    const text = await response.text().catch(() => '')
+    throw new Error(`file open bridge returned ${response.status}: ${text}`)
+  }
+  const data = await response.json() as { error?: string }
+  if (data.error) throw new Error(`file open bridge: ${data.error}`)
+}
+
 /** Translate a WSL path before handing it to the Windows desktop. */
 async function openWslPath(path: string, signal: AbortSignal, run: PathOpenerRunner): Promise<void> {
   const translated = await run('wslpath', ['-w', path], signal)
@@ -127,6 +146,15 @@ async function openNativePathWithIntent(
   const run = internals.run ?? runNativeCommand
   const env = internals.env ?? process.env
   const wsl = platform === 'linux' && isWsl(internals)
+
+  if (platform === 'win32' && intent === 'text-editor') {
+    const endpoint = env.FREECODE_FILE_OPEN_ENDPOINT
+    const token = env.FREECODE_DIALOG_BRIDGE_TOKEN
+    if (endpoint && token) {
+      await openViaElectronBridge(endpoint, token, path, signal)
+      return
+    }
+  }
 
   if (!wsl && intent === 'default' && BROWSER_DOCUMENTS.has(extname(path).toLowerCase())
     && await openInBrowser(path, signal, platform, run, env)) return

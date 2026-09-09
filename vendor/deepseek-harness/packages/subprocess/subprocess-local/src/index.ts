@@ -170,6 +170,10 @@ export class LocalSubprocessRuntime extends SubprocessRuntime {
       cols: spec.cols,
       cwd: spec.cwd,
       env: childEnv(spec.env),
+      // Prefer the Windows pseudoconsole backend explicitly. Without this,
+      // older node-pty builds may fall back to winpty and briefly create a
+      // visible console window for every persistent tool session.
+      ...(process.platform === 'win32' ? { useConpty: true } : {}),
     }
     const inspector = this.terminalInspector ?? createProcessInspector()
     const terminal = nodePty.spawn(file, [...spec.argv.slice(1)], options)

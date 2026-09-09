@@ -25,15 +25,15 @@ Los artefactos portable y setup incluyen un runtime local y pueden requerir vari
 
 ### KI-003 — RTK and Caveman remain external optional tools / RTK y Caveman siguen siendo herramientas externas opcionales
 
-RTK and Caveman are not bundled, downloaded, or installed by FreeCode. The Shell settings card exposes independent toggles; RTK defaults on when its executable is present, while Caveman defaults off. A toggle only takes effect when the corresponding executable is already available; otherwise the original eligible command runs. This is intentional.
+RTK and Caveman are not bundled, downloaded, or installed by FreeCode. The Shell settings card exposes independent toggles; both default on when their executable is present. A toggle only takes effect when the corresponding executable is already available; otherwise the original eligible command runs. This is intentional.
 
-FreeCode no incluye, descarga ni instala RTK ni Caveman. La tarjeta Shell de Configuración expone toggles independientes; RTK queda activo por defecto si existe su ejecutable y Caveman queda desactivado. Cada toggle sólo tiene efecto cuando ya existe el ejecutable correspondiente; de lo contrario se ejecuta el comando elegible original. Es intencional.
+FreeCode no incluye, descarga ni instala RTK ni Caveman. La tarjeta Shell de Configuración expone toggles independientes; ambos quedan activos por defecto si existe su ejecutable. Cada toggle sólo tiene efecto cuando ya existe el ejecutable correspondiente; de lo contrario se ejecuta el comando elegible original. Es intencional.
 
 ### KI-004 — External MCP processes need prerequisites / Los procesos MCP externos requieren prerequisites
 
-The MCP client bridge, catalog, configuration file, and managed patch are shipped and enabled on first boot. Serena and the TypeScript/Python LSP processes remain external prerequisites (`uvx`, Go, npm language servers). If one is missing, the managed entry is explicitly disabled/reported and the core app continues to boot. See [`mcp-servers.md`](mcp-servers.md).
+The MCP client bridge, catalog, configuration file, and managed patch are shipped and enabled on first boot. Windows desktop builds also bootstrap the pinned official `uvx.exe` into the user profile when it is missing. Serena owns semantic code navigation; no separate LSP bridge is shipped. If any prerequisite is unavailable, the managed entry is explicitly reported and the core app continues to boot. See [`mcp-servers.md`](mcp-servers.md).
 
-El bridge cliente MCP, el catálogo, el archivo de configuración y el patch administrado vienen incluidos y activados en el primer arranque. Los procesos Serena y LSP de TypeScript/Python siguen requiriendo prerequisites externos (`uvx`, Go y language servers npm). Si falta uno, la entrada administrada se desactiva/informa explícitamente y la app principal sigue arrancando. Ver [`mcp-servers.md`](mcp-servers.md).
+El bridge cliente MCP, el catálogo, el archivo de configuración y el patch administrado vienen incluidos y activados en el primer arranque. Los builds de escritorio de Windows también instalan silenciosamente el `uvx.exe` oficial fijado en el perfil del usuario cuando falta. Serena gestiona la navegación semántica; no se distribuye un bridge LSP separado. Si falta algún prerequisite, la entrada administrada lo informa explícitamente y la app principal sigue arrancando. Ver [`mcp-servers.md`](mcp-servers.md).
 
 ### KI-005 — Provider/model desynchronization can look like an invalid API key / El desajuste proveedor-modelo puede parecer una API key inválida
 

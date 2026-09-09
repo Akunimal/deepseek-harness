@@ -56,6 +56,10 @@ export const IpcChannels = {
   modelsRefresh: 'models:refresh',
   omnirouteDetect: 'omniroute:detect',
   settingsOpenFolder: 'settings:openFolder',
+  mcpGetState: 'mcp:getState',
+  mcpSetEnabled: 'mcp:setEnabled',
+  mcpOpenConfig: 'mcp:openConfig',
+  mcpStatus: 'mcp:status',
   harnessRestart: 'harness:restart',
   torfleetEnable: 'torfleet:enable',
   torfleetStatus: 'torfleet:status',
@@ -75,6 +79,10 @@ export interface IpcPayloads {
   [IpcChannels.modelsRefresh]: void;
   [IpcChannels.omnirouteDetect]: void;
   [IpcChannels.settingsOpenFolder]: void;
+  [IpcChannels.mcpGetState]: void;
+  [IpcChannels.mcpSetEnabled]: { id: string; enabled: boolean };
+  [IpcChannels.mcpOpenConfig]: void;
+  [IpcChannels.mcpStatus]: McpRuntimeStatus;
   [IpcChannels.harnessRestart]: void;
   [IpcChannels.torfleetEnable]: { enabled: boolean };
   [IpcChannels.torfleetStatus]: { enabled: boolean; instances: TorInstance[] };
@@ -111,6 +119,12 @@ export interface FreeCodeApi {
   settings: {
     openFolder(): Promise<void>;
   };
+  mcp: {
+    getState(): Promise<EmbeddedMcpState>;
+    setEnabled(id: string, enabled: boolean): Promise<EmbeddedMcpState>;
+    openConfig(): Promise<void>;
+    onStatus(cb: (status: McpRuntimeStatus) => void): () => void;
+  };
   torfleet: {
     enable(on: boolean): Promise<void>;
     onStatus(cb: (payload: IpcPayloads[typeof IpcChannels.torfleetStatus]) => void): () => void;
@@ -122,6 +136,33 @@ export interface FreeCodeApi {
     status(): Promise<{ available: boolean; binaryPath: string | null }>;
     extract(imageBase64: string, lang?: string): Promise<OcrResult>;
   };
+}
+
+/** Public, non-secret projection of the product-managed MCP catalog. */
+export interface EmbeddedMcpServer {
+  id: string;
+  serverName: string;
+  transport: 'stdio' | 'streamable-http';
+  command: string;
+  args: string[];
+  cwd: string;
+  enabled: boolean;
+  optionalPrerequisite?: string;
+  runtime?: McpRuntimeStatus;
+}
+
+/** Runtime evidence for one managed MCP server, derived from the live bridge. */
+export const McpRuntimeStatusSchema = z.object({
+  serverId: z.string().min(1),
+  state: z.enum(['disabled', 'starting', 'ready', 'degraded', 'failed']),
+  toolCount: z.number().int().min(0),
+  error: z.string().max(1_024).optional(),
+});
+export type McpRuntimeStatus = z.infer<typeof McpRuntimeStatusSchema>;
+
+export interface EmbeddedMcpState {
+  configPath: string;
+  servers: EmbeddedMcpServer[];
 }
 
 export * from './chat.js';

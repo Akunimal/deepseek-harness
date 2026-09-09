@@ -46,30 +46,21 @@ for (const { dir, name } of packageDirs) {
   });
 }
 
-function containsNativeBinaries(dir) {
-  if (!fs.existsSync(dir)) return false;
-  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    const name = entry.name;
-    if (entry.isFile() && (name.endsWith('.node') || name.endsWith('.dll') || name.endsWith('.dylib') || name.endsWith('.so'))) {
-      return true;
-    }
-    if (entry.isDirectory() && !entry.isSymbolicLink()) {
-      if (containsNativeBinaries(path.join(dir, name))) return true;
-    }
-  }
-  return false;
-}
-
+// The stage is installed with pnpm's hoisted linker. All runtime dependencies,
+// including native optional packages, therefore live in stage/node_modules and
+// are checked by package-runtime.sh after this step. Workspace package
+// node_modules entries are only pnpm links/shims; recursively searching them for
+// native binaries made Windows packaging spend unbounded time walking junctions
+// and generated the same class of unreliable "built but not runnable" artifact
+// this script is meant to prevent.
+let removedNestedNodeModules = 0;
 function removeNestedNodeModules(dir) {
   if (!fs.existsSync(dir)) return;
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     if (entry.name === 'node_modules' && dir !== stage) {
       const nmPath = path.join(dir, entry.name);
-      if (containsNativeBinaries(nmPath)) {
-        console.log(`materialize-runtime: preserving ${nmPath} (contains native binaries)`);
-        continue;
-      }
       fs.rmSync(nmPath, { recursive: true, force: true });
+      removedNestedNodeModules += 1;
       continue;
     }
     if (entry.isDirectory() && !entry.isSymbolicLink()) {
@@ -80,20 +71,20 @@ function removeNestedNodeModules(dir) {
 
 for (const root of roots) removeNestedNodeModules(root);
 
-function removeBinDirectories(dir) {
-  if (!fs.existsSync(dir)) return;
-  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    const full = path.join(dir, entry.name);
-    if (entry.name === '.bin' && entry.isDirectory()) {
-      fs.rmSync(full, { recursive: true, force: true });
-      continue;
-    }
-    if (entry.isDirectory() && !entry.isSymbolicLink()) removeBinDirectories(full);
+// pnpm's command shims are useful in a checkout but are not needed by the
+// runtime entrypoint. Remove only the locations that can exist in this
+// materialized layout. Walking the entire hoisted dependency tree here is
+// needlessly expensive on Windows and can traverse thousands of package files.
+const binDirectories = new Set([
+  path.join(stage, 'node_modules', '.bin'),
+  ...packageDirs.map(({ dir }) => path.join(dir, '.bin')),
+]);
+let removedBinDirectories = 0;
+for (const binDirectory of binDirectories) {
+  if (fs.existsSync(binDirectory)) {
+    fs.rmSync(binDirectory, { recursive: true, force: true });
+    removedBinDirectories += 1;
   }
 }
 
-// pnpm's command shims are symlinks/junctions. They are useful in a checkout
-// but break portable NSIS/asar compression on Windows and are not needed by
-// the runtime entrypoint.
-removeBinDirectories(stage);
-console.log(`materialize-runtime: copied ${packageDirs.length} workspace packages into ${rootModules}`);
+console.log(`materialize-runtime: copied ${packageDirs.length} workspace packages into ${rootModules}; removed ${removedNestedNodeModules} nested node_modules directories and ${removedBinDirectories} .bin directories`);

@@ -2,6 +2,7 @@ import { app, BrowserWindow, Menu, Tray, WebContentsView, nativeImage, Notificat
 import { join, resolve } from 'node:path';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { spawn, spawnSync } from 'node:child_process';
+import type { McpRuntimeStatus } from '@freecode/shared-types';
 import { createShellRuntime, ShellRuntime } from './runtime.js';
 import { DEFAULT_POOL_SIZE } from '@freecode/opencode-adapter';
 import { createSecretStore, ensureSecret } from './secret-store.js';
@@ -16,14 +17,9 @@ import { createEmbeddedBrowser, type EmbeddedBrowser } from './embedded-browser.
 import { createDialogBridge, type DialogBridge } from './dialog-bridge.js';
 import { buildHarnessExtraEnv } from './harness-env.js';
 import { awaitHarnessLayout, formatPreflightFailure } from './preflight.js';
+import { ensureUvxCommand } from './uvx-bootstrap.js';
 import { initLocale, setLocale as setNativeLocale, t } from './i18n.js';
 import { shouldNotifyBackendState, type BackendState } from './backend-state.js';
-import {
-  DEFAULT_GEMINI_WEB2API_PORT,
-  GEMINI_WEB_FALLBACK_MODELS,
-  GEMINI_WEB_PROVIDER,
-  GeminiWeb2ApiSupervisor,
-} from './gemini-web2api-supervisor.js';
 import {
   TorFleet,
   loadTorFleetState,
@@ -119,21 +115,12 @@ function findNode(): string {
 
 async function bootstrap(): Promise<ShellRuntime> {
   const userDataDir = app.getPath('userData');
-  const resources = resourcesDir();
-  geminiWeb2Api = new GeminiWeb2ApiSupervisor({
-    resourcesDir: resources,
+  const uvxCommand = await ensureUvxCommand({
+    platform: process.platform,
     userDataDir,
-    port: resolveGeminiPort(),
-    pythonPath: process.env.FREECODE_GEMINI_WEB2API_PYTHON,
-    log: (level, msg, meta) => {
-      const fn = level === 'error' || level === 'warn' ? level : 'info';
-      appLogger?.logger[fn]?.(meta ?? {}, msg);
-    },
+    log: (level, message, meta) => appLogger?.logger[level](meta ?? {}, message),
   });
-  const geminiResult = await geminiWeb2Api.start();
-  if (!geminiResult.available) {
-    appLogger?.logger.warn({ reason: geminiResult.reason }, 'Gemini Web2API provider is unavailable; route remains configured');
-  }
+  const resources = resourcesDir();
   const secrets = await createSecretStore(userDataDir);
   // OpenCode's public route is the zero-config OpenCode Free pool. Keep it in
   // the vault so llm-pi-ai reports the seeded provider as configured, while
@@ -151,6 +138,7 @@ async function bootstrap(): Promise<ShellRuntime> {
     secretEnvNames: ['FREECODE_PUBLIC_KEY'],
     nodeEnv: nodeRuntimeEnv(app.isPackaged),
     extraEnv: buildHarnessExtraEnv(dialogBridge),
+    uvxCommand,
     browserBridge: embeddedBrowser ? { endpoint: embeddedBrowser.endpoint, token: embeddedBrowser.token } : undefined,
     // The LB fires this once when every ready worker is rate-limited. The
     // concrete handler is assigned after enableTorfleet is defined; a 429
@@ -178,7 +166,6 @@ let localUpdateRunning = false;
 let torfleet: TorFleet | null = null;
 let embeddedBrowser: EmbeddedBrowser | null = null;
 let dialogBridge: DialogBridge | null = null;
-let geminiWeb2Api: GeminiWeb2ApiSupervisor | null = null;
 let updateIndicatorView: WebContentsView | null = null;
 let latestUpdateResult: UpdateCheckResult | null = null;
 let updateCheckInFlight: Promise<UpdateCheckResult | null> | null = null;
@@ -200,6 +187,30 @@ let shuttingDown = false;
 let refreshIntervalId: NodeJS.Timeout | null = null;
 let refreshRetryTimer: NodeJS.Timeout | null = null;
 const backendStates: Record<'catalog' | 'pool', BackendState> = { catalog: 'unknown', pool: 'unknown' };
+const mcpLastStates = new Map<string, McpRuntimeStatus['state']>();
+
+function mcpTraySummary(): string | null {
+  const servers = runtime?.mcpState().servers ?? [];
+  if (servers.length === 0) return null;
+  const enabled = servers.filter((server) => server.enabled);
+  const ready = enabled.filter((server) => server.runtime?.state === 'ready').length;
+  return t('tray.mcpStatus', ready, enabled.length);
+}
+
+function reportMcpStatus(status: McpRuntimeStatus): void {
+  const previous = mcpLastStates.get(status.serverId);
+  mcpLastStates.set(status.serverId, status.state);
+  updateTrayMenu();
+  if (status.state !== 'failed' || previous === 'failed') return;
+  try {
+    new Notification({
+      title: t('mcp.failed.title'),
+      body: t('mcp.failed.message', status.serverId),
+    }).show();
+  } catch {
+    // The tab, tray tooltip, and app log remain available when notifications are blocked.
+  }
+}
 
 function reportBackendState(kind: 'catalog' | 'pool', state: Exclude<BackendState, 'unknown'>, detail?: string): void {
   const previous = backendStates[kind];
@@ -595,6 +606,7 @@ function bundledUpstreamCommit(resources: string): string | undefined {
     cwd: projectRoot(),
     encoding: 'utf8',
     windowsHide: true,
+    shell: false,
   });
   const output = typeof result.stdout === 'string' ? result.stdout : '';
   const match = output.match(/git-subtree-split:\s*([0-9a-f]+)/i);
@@ -732,7 +744,7 @@ function runLocalUpstreamUpdate(): void {
   const script = resolve(projectRoot(), 'scripts/update-upstream-local.mjs');
   const node = resolveNodePath({ packaged: false });
   // Whitelist safe env vars — don't leak Electron internals or API keys to the
-  // child process (matches the pattern used by harness-supervisor and gemini supervisor).
+  // child process (matches the pattern used by harness-supervisor).
   const UPDATE_SAFE_ENV_KEYS = [
     'PATH', 'HOME', 'USER', 'USERPROFILE', 'HOMEDRIVE', 'HOMEPATH', 'TEMP', 'TMP', 'TMPDIR',
     'SYSTEMROOT', 'WINDIR', 'COMSPEC', 'PROGRAMFILES', 'PROGRAMFILES(X86)', 'LOCALAPPDATA',
@@ -818,13 +830,16 @@ function updateTrayMenu(): void {
     : updateActivity === 'installing'
       ? t('tray.updateInstalling')
       : null;
-  tray?.setToolTip(activityLabel ?? t('tray.tooltip'));
+  const mcpSummary = mcpTraySummary();
+  tray?.setToolTip([activityLabel, mcpSummary].filter((value): value is string => value !== null).join(' · ') || t('tray.tooltip'));
   const activityItems: Electron.MenuItemConstructorOptions[] = activityLabel
     ? [{ label: activityLabel, enabled: false }, { type: 'separator' }]
     : [];
+  const mcpItem = mcpSummary === null ? [] : [{ label: mcpSummary, enabled: false } satisfies Electron.MenuItemConstructorOptions, { type: 'separator' as const }];
   tray?.setContextMenu(
     Menu.buildFromTemplate([
       ...activityItems,
+      ...mcpItem,
       { label: t('tray.show'), click: () => showMainWindowFromTray() },
       { label: t('menu.poolStatus'), click: () => openOverlay() },
       {
@@ -889,13 +904,6 @@ function applyNativeLocale(value: 'zh' | 'en' | 'es'): void {
 
 const REFRESH_INTERVAL_MS = 30 * 60 * 1000;
 const REFRESH_RETRY_DELAYS_MS = [5_000, 15_000, 30_000, 60_000, 120_000];
-
-function resolveGeminiPort(): number {
-  const parsed = Number(process.env.FREECODE_GEMINI_WEB2API_PORT ?? DEFAULT_GEMINI_WEB2API_PORT);
-  return Number.isInteger(parsed) && parsed > 0 && parsed <= 65_535
-    ? parsed
-    : DEFAULT_GEMINI_WEB2API_PORT;
-}
 
 app.whenReady().then(async () => {
   configurePortableDataDir();
@@ -970,12 +978,15 @@ app.whenReady().then(async () => {
   }
   if (process.platform === 'win32') {
     try {
-      dialogBridge = await createDialogBridge();
+      dialogBridge = await createDialogBridge(join(userDataDir, 'dsh-home'));
     } catch (error) {
       appLogger?.logger.warn({ err: error }, 'dialog bridge unavailable; directory picker falls back to koffi worker');
     }
   }
   runtime = await bootstrap();
+  // Register before start so MCP failures from the first child generation are
+  // visible in the tray/notification path as well as in the Settings tab.
+  runtime.onMcpStatus(reportMcpStatus);
   await runtime.start();
 
   const lbUrl = runtime.lb.url();
@@ -985,12 +996,11 @@ app.whenReady().then(async () => {
   };
   runtime.pool.onWorkerChange(reportPoolState);
   reportPoolState();
-  // FASE 5: seed once the LB is up.
-  const geminiBaseUrl = geminiWeb2Api?.baseUrl ?? `http://127.0.0.1:${resolveGeminiPort()}`;
+  // Seed once the LB is up. This migration also removes the old managed
+  // Gemini route from persisted settings without touching unrelated providers.
   seedProviders({
     homeDir: join(userDataDir, 'dsh-home'),
     lbBaseUrl: `${lbUrl}/v1`,
-    geminiBaseUrl,
   });
 
   // FASE 6: model refresh at boot + every 30 min.
@@ -1016,12 +1026,6 @@ app.whenReady().then(async () => {
         homeDir: join(userDataDir, 'dsh-home'),
         userDataDir,
         authHeader: 'Bearer public',
-        providers: [{
-          provider: GEMINI_WEB_PROVIDER,
-          baseUrl: geminiBaseUrl,
-          probeModels: false,
-          fallbackModels: GEMINI_WEB_FALLBACK_MODELS,
-        }],
         onUpdate: (c) => {
           catalog = c;
           reportBackendState('catalog', c.availability === 'degraded' ? 'degraded' : 'ready',
@@ -1126,7 +1130,6 @@ app.whenReady().then(async () => {
     userDataDir,
     homeDir: join(userDataDir, 'dsh-home'),
     lbBaseUrl: lbUrl,
-    geminiBaseUrl,
     catalogStore: { get: () => catalog },
     torfleet: {
       get instance() { return torfleet; },
@@ -1147,11 +1150,15 @@ app.whenReady().then(async () => {
 
   // Wait for harness readiness, then open the window on its URL.
   runtime.supervisor.onReady((h) => {
+    appLogger?.logger.info({ url: h.url, pid: h.pid, restarts: h.restarts }, 'harness ready');
     closeSplash();
     if (!mainWindow) createMainWindow(h.url);
     if (process.platform !== 'darwin') {
       try {
-        new Notification({ title: t('notify.ready.title'), body: h.url }).show();
+        // The readiness URL contains a one-time authentication token. Never
+        // put it in an OS notification, where it can be retained or exposed
+        // to notification history; the window already loads the URL directly.
+        new Notification({ title: t('notify.ready.title'), body: t('notify.ready.body') }).show();
       } catch {
         /* fallback silent */
       }
@@ -1216,7 +1223,6 @@ app.on('before-quit', async (e) => {
       try { await torfleet.stop(); } catch { /* best effort */ }
       torfleet = null;
     }
-    await geminiWeb2Api?.stop();
     await embeddedBrowser?.close();
     embeddedBrowser = null;
     await dialogBridge?.close();

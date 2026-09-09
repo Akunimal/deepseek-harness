@@ -1,8 +1,9 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 
-// On Windows, bare `bash` can resolve to WSL, which installs Linux-only native
-// optional packages even when DSH_TARGET_OS=win32. Pin Git Bash explicitly.
+// The 0.5.0 release is Windows-only. WSL is allowed as a build host, but the
+// target must remain Win32 so native dependencies and the OCR payload cannot
+// silently switch to Linux.
 let bash = 'bash';
 if (process.platform === 'win32') {
   const gitBash = 'C:/Program Files/Git/bin/bash.exe';
@@ -15,12 +16,19 @@ if (process.platform === 'win32') {
   }
 }
 
+const targetOs = process.env.DSH_TARGET_OS ?? 'win32';
+const targetCpu = process.env.DSH_TARGET_CPU ?? 'x64';
+if (targetOs !== 'win32') {
+  console.error(`run-package-runtime: unsupported target ${targetOs}; 0.5.0 is Windows-only.`);
+  process.exit(2);
+}
+
 const result = spawnSync(bash, ['scripts/package-runtime.sh'], {
   stdio: 'inherit',
   env: {
     ...process.env,
-    DSH_TARGET_OS: process.platform,
-    DSH_TARGET_CPU: process.arch,
+    DSH_TARGET_OS: targetOs,
+    DSH_TARGET_CPU: targetCpu,
   },
 });
 

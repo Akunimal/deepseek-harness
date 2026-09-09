@@ -108,6 +108,27 @@ describe('native path opener', () => {
     )
   })
 
+  it('uses the authenticated Electron bridge for Windows settings documents', async () => {
+    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => ({}) }))
+    vi.stubGlobal('fetch', fetchMock)
+    const run = vi.fn<PathOpenerRunner>()
+    await openNativeTextFile('C:\\work\\settings.yaml', signal(), {
+      platform: 'win32',
+      run,
+      env: {
+        FREECODE_FILE_OPEN_ENDPOINT: 'http://127.0.0.1:9000/open-text-file',
+        FREECODE_DIALOG_BRIDGE_TOKEN: 'token',
+      },
+    })
+    expect(fetchMock).toHaveBeenCalledWith('http://127.0.0.1:9000/open-text-file', expect.objectContaining({
+      method: 'POST',
+      headers: expect.objectContaining({ 'x-freecode-dialog-token': 'token' }),
+      body: JSON.stringify({ path: 'C:\\work\\settings.yaml' }),
+    }))
+    expect(run).not.toHaveBeenCalled()
+    vi.unstubAllGlobals()
+  })
+
   it('opens with Linux xdg-open', async () => {
     const run = vi.fn<PathOpenerRunner>(async () => ({ stdout: '', stderr: '' }))
     await openNativePath('/tmp/a.txt', signal(), {

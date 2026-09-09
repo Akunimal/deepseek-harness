@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync, renameSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { load as loadYaml, dump as dumpYaml } from 'js-yaml';
-import { reasoningEffortsForModel } from './reasoning-policy.js';
+import { compatForModel, reasoningEffortsForModel } from './reasoning-policy.js';
 
 /**
  * Model refresher — probes OpenAI-compatible provider routes, persists a
@@ -214,7 +214,7 @@ function syncProviderModels(
   if (responders.length > 0) {
     const responderIds = new Set(responders.map((model) => model.id));
     provider.models = [...responders, ...advertisedFallbacks.filter((model) => !responderIds.has(model.id))]
-      .map((model) => ({ id: model.id, reasoningEfforts: reasoningEffortsForModel(model.id) }));
+      .map((model) => modelSettingsForModel(model.id));
     return;
   }
 
@@ -228,17 +228,30 @@ function syncProviderModels(
     .filter((id) => !appendedIds.has(id))
     .map((id) => {
       appendedIds.add(id);
-      return { id, reasoningEfforts: reasoningEffortsForModel(id) };
+      return modelSettingsForModel(id);
     });
   const fallbackAdvertised = advertisedFallbacks
     .filter((model) => !appendedIds.has(model.id))
     .map((model) => {
       appendedIds.add(model.id);
-      return { id: model.id, reasoningEfforts: reasoningEffortsForModel(model.id) };
+      return modelSettingsForModel(model.id);
     });
   if (fallbackEntries.length > 0 || fallbackAdvertised.length > 0) {
     provider.models = [...current, ...fallbackEntries, ...fallbackAdvertised];
   }
+}
+
+function modelSettingsForModel(id: string): {
+  id: string;
+  reasoningEfforts: ReturnType<typeof reasoningEffortsForModel>;
+  compat?: { thinkingFormat: 'deepseek'; supportsReasoningEffort: false };
+} {
+  const compat = compatForModel(id);
+  return {
+    id,
+    reasoningEfforts: reasoningEffortsForModel(id),
+    ...(compat === undefined ? {} : { compat }),
+  };
 }
 
 function endpointUrl(baseUrl: string, suffix: string): string {

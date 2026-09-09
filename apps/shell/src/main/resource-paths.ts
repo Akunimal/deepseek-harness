@@ -17,18 +17,6 @@ export function resolveResourcesDir(options: ResourcePathOptions): string {
   return options.developmentRoot ?? resolve(import.meta.dirname, '../../../resources');
 }
 
-/** Resolve the optional vendored Gemini Web2API source in both layouts. */
-export function resolveGeminiWeb2ApiDir(resourcesDir: string): string {
-  const candidates = [
-    resolve(resourcesDir, 'gemini-web2api'),
-    // Development keeps the source under vendor/; package-runtime copies it
-    // beside dsh/ into the first candidate above.
-    resolve(resourcesDir, '..', '..', '..', 'vendor', 'gemini-web2api'),
-  ];
-  return candidates.find((candidate) => existsSync(resolve(candidate, 'gemini_web2api', '__main__.py')))
-    ?? candidates[0]!;
-}
-
 /** Find the platform worker binary in both the legacy dev layout and the
  * packaged layout. Keeping this compatibility layer makes old checkouts and
  * fresh package-runtime stages runnable during the transition. */
@@ -69,6 +57,7 @@ export function resolveNodePath(options: NodePathOptions): string {
   const result = spawnSync(platform === 'win32' ? 'where' : 'which', ['node'], {
     encoding: 'utf8',
     windowsHide: true,
+    shell: false,
   });
   const first = result.stdout.split(/\r?\n/)[0]?.trim();
   return first || 'node';

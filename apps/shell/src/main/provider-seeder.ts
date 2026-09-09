@@ -1,15 +1,8 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync, renameSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { load as loadYaml, dump as dumpYaml } from 'js-yaml';
-import { isDeepSeekModel, reasoningEffortsForModel } from './reasoning-policy.js';
+import { compatForModel, isDeepSeekModel, reasoningEffortsForModel } from './reasoning-policy.js';
 import type { ModelReasoningEfforts } from './reasoning-policy.js';
-import {
-  DEFAULT_GEMINI_WEB2API_PORT,
-  GEMINI_WEB_DISPLAY_NAME,
-  GEMINI_WEB_FALLBACK_MODELS,
-  GEMINI_WEB_PROVIDER,
-  LOCAL_PROVIDER_AUTH_HEADER,
-} from './local-provider-config.js';
 
 /**
  * Provider seeder — runs ONCE the harness-supervisor reports ready.
@@ -33,7 +26,6 @@ export interface SeederConfig {
   homeDir: string; // DSH_HOME
   lbBaseUrl: string; // http://127.0.0.1:<PUERTO_LB>/v1
   apiKeyEnv?: string; // default FREECODE_PUBLIC_KEY
-  geminiBaseUrl?: string; // http://127.0.0.1:<port>
 }
 
 interface ProviderEntry {
@@ -44,7 +36,9 @@ interface ProviderEntry {
   headers?: Record<string, string>;
   defaultInput?: string[];
   models?: unknown[];
-  compat?: Record<string, string>;
+  // Compat values include booleans such as supportsReasoningEffort; keep the
+  // user-layer type honest instead of pretending every override is a string.
+  compat?: Record<string, unknown>;
   reasoning?: string;
 }
 
@@ -64,9 +58,9 @@ const LEGACY_FREE_PROVIDER_DISPLAY_NAMES = new Set([
 ]);
 /** Seed model — the model-refresher replaces this with the live catalog. */
 const FALLBACK_MODELS = [{ id: 'x-preview-f', reasoningEfforts: reasoningEffortsForModel('x-preview-f') }];
-const DEFAULT_GEMINI_BASE_URL = `http://127.0.0.1:${DEFAULT_GEMINI_WEB2API_PORT}`;
 const LEGACY_PERPLEXITY_PROVIDER = 'perplexity-free';
 const LEGACY_PERPLEXITY_DISPLAY_NAME = 'Perplexity Free (local)';
+const REMOVED_GEMINI_PROVIDER = 'gemini-web';
 const MARKER_FILE = '.freecode-seeded-v1';
 
 export function seedProviders(cfg: SeederConfig): { seeded: boolean; path: string } {
@@ -132,46 +126,13 @@ export function seedProviders(cfg: SeederConfig): { seeded: boolean; path: strin
     seeded = true;
   }
 
-  // Gemini Web2API is an optional local route. It is seeded alongside the
-  // built-in pool, but never selected as the default model. This keeps the
-  // provider visible and schema-valid even while its Python process is still
-  // starting or unavailable on a machine without Python.
-  const geminiProvider = providers[GEMINI_WEB_PROVIDER];
-  const geminiBaseUrl = `${cfg.geminiBaseUrl ?? DEFAULT_GEMINI_BASE_URL}/v1`;
-  if (!geminiProvider) {
-    providers[GEMINI_WEB_PROVIDER] = {
-      displayName: GEMINI_WEB_DISPLAY_NAME,
-      api: 'openai-completions',
-      baseURL: geminiBaseUrl,
-      headers: { Authorization: LOCAL_PROVIDER_AUTH_HEADER },
-      defaultInput: ['text'], // Gemini Web bridge is text-only — image inputs are unsupported
-      models: cloneGeminiFallbackModels(),
-    };
+  // Gemini Web2API was a FreeCode-managed route in older releases. Remove
+  // only that exact route during migration; unrelated user providers remain
+  // untouched. Historical sessions still retain their messages because this
+  // migration only changes the live provider catalog.
+  if (providers[REMOVED_GEMINI_PROVIDER] !== undefined) {
+    delete providers[REMOVED_GEMINI_PROVIDER];
     seeded = true;
-  } else {
-    if (!geminiProvider.displayName) {
-      geminiProvider.displayName = GEMINI_WEB_DISPLAY_NAME;
-      seeded = true;
-    }
-    if (!geminiProvider.api) {
-      geminiProvider.api = 'openai-completions';
-      seeded = true;
-    }
-    if (!geminiProvider.baseURL) {
-      geminiProvider.baseURL = geminiBaseUrl;
-      seeded = true;
-    }
-    if (geminiProvider.apiKeyEnv === undefined && !hasHeader(geminiProvider.headers, 'authorization')) {
-      geminiProvider.headers = {
-        ...(geminiProvider.headers ?? {}),
-        Authorization: LOCAL_PROVIDER_AUTH_HEADER,
-      };
-      seeded = true;
-    }
-    if (!Array.isArray(geminiProvider.models) || geminiProvider.models.length === 0) {
-      geminiProvider.models = cloneGeminiFallbackModels();
-      seeded = true;
-    }
   }
 
   // Ensure agent-default-model points to deepseek-free with a model that
@@ -212,28 +173,31 @@ function cloneFallbackModels(): { id: string; reasoningEfforts: ModelReasoningEf
   return FALLBACK_MODELS.map((model) => ({ ...model }));
 }
 
-function cloneGeminiFallbackModels(): { id: string; reasoningEfforts: ModelReasoningEfforts }[] {
-  return GEMINI_WEB_FALLBACK_MODELS.map((id) => ({
-    id,
-    reasoningEfforts: reasoningEffortsForModel(id),
-  }));
-}
-
 function normalizeModelEntries(models: unknown[]): unknown[] {
   return models.map((model) => {
     if (model === null || typeof model !== 'object' || Array.isArray(model)) return model;
-    const entry = model as { id?: unknown; reasoningEfforts?: unknown };
+    const entry = model as {
+      id?: unknown;
+      reasoningEfforts?: unknown;
+      compat?: Record<string, unknown>;
+    };
     if (typeof entry.id !== 'string') return model;
     const desired = reasoningEffortsForModel(entry.id);
-    return JSON.stringify(entry.reasoningEfforts) === JSON.stringify(desired)
+    const desiredCompat = compatForModel(entry.id);
+    const mergedCompat = desiredCompat === undefined
+      ? entry.compat
+      : { ...(entry.compat ?? {}), ...desiredCompat };
+    const reasoningMatches = JSON.stringify(entry.reasoningEfforts) === JSON.stringify(desired);
+    const compatMatches = desiredCompat === undefined
+      || JSON.stringify(entry.compat) === JSON.stringify(mergedCompat);
+    return reasoningMatches && compatMatches
       ? model
-      : { ...entry, reasoningEfforts: desired };
+      : {
+        ...entry,
+        reasoningEfforts: desired,
+        ...(desiredCompat === undefined ? {} : { compat: mergedCompat }),
+      };
   });
-}
-
-function hasHeader(headers: Record<string, string> | undefined, name: string): boolean {
-  return Object.entries(headers ?? {}).some(([key, value]) =>
-    key.toLowerCase() === name.toLowerCase() && value.trim().length > 0);
 }
 
 function readSettings(path: string): SettingsShape {

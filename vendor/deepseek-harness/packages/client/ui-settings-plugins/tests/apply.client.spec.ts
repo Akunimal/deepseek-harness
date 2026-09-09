@@ -103,6 +103,7 @@ describe('ui-settings-plugins apply', () => {
     const initialTabs = sectionFace.hooks.tabs.getSnapshot()
     expect(initialTabs).toEqual([
       { id: 'configurable', order: 0, label: '插件配置' },
+      { id: 'mcp', order: 5, label: 'MCP' },
     ])
     expect(sectionFace.hooks.tabs.getSnapshot()).toBe(initialTabs)
 
@@ -112,6 +113,7 @@ describe('ui-settings-plugins apply', () => {
     expect(sectionFace.hooks.tabs.getSnapshot()).toEqual([
       { id: 'configurable', order: 0, label: '插件配置' },
       { id: 'plain', order: 0, label: '' },
+      { id: 'mcp', order: 5, label: 'MCP' },
     ])
     unsubscribe()
 

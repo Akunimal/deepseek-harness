@@ -344,6 +344,44 @@ describe('LocalSubprocessRuntime', () => {
     }
   })
 
+  it('requests the Windows pseudoconsole backend for persistent terminals', async () => {
+    const platform = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+    let receivedOptions: Record<string, unknown> | undefined
+    let exitListener: ((event: { exitCode: number; signal?: number }) => void) | undefined
+    const terminal = {
+      pid: 123,
+      onData: () => ({ dispose: () => {} }),
+      onExit: (listener: (event: { exitCode: number; signal?: number }) => void) => {
+        exitListener = listener
+        return { dispose: () => {} }
+      },
+      write: () => {},
+      kill: () => { exitListener?.({ exitCode: 0 }) },
+    }
+    vi.resetModules()
+    vi.doMock('node-pty', () => ({
+      spawn: (_file: string, _args: string[], options: Record<string, unknown>) => {
+        receivedOptions = options
+        return terminal
+      },
+    }))
+    try {
+      const { default: IsolatedLocalSubprocessRuntime } = await import('../src/index.ts')
+      const ctx = new Context()
+      const fiber = await ctx.plugin(IsolatedLocalSubprocessRuntime)
+      const handle = await ctx.subprocess.spawnTerminal({
+        argv: ['shell'], cwd: process.cwd(), rows: 24, cols: 80, graceMs: 1,
+      })
+      expect(receivedOptions).toHaveProperty('useConpty', true)
+      await handle.terminate()
+      await fiber.dispose()
+    } finally {
+      platform.mockRestore()
+      vi.doUnmock('node-pty')
+      vi.resetModules()
+    }
+  })
+
   it('retains a terminal whose automatic cleanup fails', async () => {
     let exitListener: ((event: { exitCode: number; signal?: number }) => void) | undefined
     const terminal = {

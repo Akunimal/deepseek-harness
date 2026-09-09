@@ -24,9 +24,11 @@ export function normalizePoolSize(value: number): number {
 
 interface ManagedWorker extends WorkerHandle {
   proc: ChildProcess | null;
+  generation: number;
   healthFails: number;
   lastRestartAt: number;
   stopped: boolean;
+  respawnTimer: NodeJS.Timeout | null;
   /** Wall-clock ms at which pickHealthy may consider this worker again.
    *  Set by parkWorker after a 5xx/connect fail; the worker keeps status
    *  'ready' (still handles direct restartWorker calls) but is skipped
@@ -85,7 +87,7 @@ function backoffMs(attempt: number): number {
 function killTree(pid: number): void {
   try {
     if (process.platform === 'win32') {
-      spawn('taskkill', ['/T', '/F', '/PID', String(pid)], { windowsHide: true });
+      spawn('taskkill', ['/T', '/F', '/PID', String(pid)], { windowsHide: true, shell: false });
     } else {
       try {
         process.kill(pid, 'SIGTERM');
@@ -105,12 +107,32 @@ function killTree(pid: number): void {
   }
 }
 
+/** Wait for the child itself to close; a fixed sleep can overlap a respawn. */
+function waitForExit(proc: ChildProcess, timeoutMs = STOP_GRACE_MS): Promise<void> {
+  if (proc.exitCode !== null || proc.signalCode !== null) return Promise.resolve();
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (): void => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve();
+    };
+    const timer = setTimeout(finish, timeoutMs);
+    timer.unref();
+    proc.once('exit', finish);
+    proc.once('close', finish);
+  });
+}
+
 export class OpenCodePool implements Pool {
   private cfg: PoolConfig;
   private workerMap = new Map<string, ManagedWorker>();
   private rrIndex = 0;
   private started = false;
   private healthTimer: NodeJS.Timeout | null = null;
+  private spawnPromises = new Map<string, Promise<void>>();
+  private generations = new Map<string, number>();
   private changeListeners = new Set<(w: WorkerHandle) => void>();
   private stuckListeners = new Set<(w: WorkerHandle) => void>();
 
@@ -145,24 +167,26 @@ export class OpenCodePool implements Pool {
       clearInterval(this.healthTimer);
       this.healthTimer = null;
     }
-    const pids = [...this.workerMap.values()].map((w) => w.pid);
-    for (const w of this.workerMap.values()) {
+    const workers = [...this.workerMap.values()];
+    for (const w of workers) {
       w.stopped = true;
+      w.generation = this.nextGeneration(w.id);
+      if (w.respawnTimer) {
+        clearTimeout(w.respawnTimer);
+        w.respawnTimer = null;
+      }
       w.status = 'stopped';
       this.emitChange(w);
     }
-    for (const pid of pids) killTree(pid);
-    // Wait briefly for the tree to die so tests can assert no orphan pids.
-    await sleep(1_500);
-    for (const w of this.workerMap.values()) {
-      if (w.proc && w.proc.exitCode === null) {
-        try {
-          w.proc.kill('SIGKILL');
-        } catch {
-          /* already dead */
-        }
-      }
-    }
+    await Promise.all(workers.map(async (w) => {
+      const proc = w.proc;
+      if (w.pid > 0) killTree(w.pid);
+      if (proc && proc.exitCode === null) await waitForExit(proc);
+    }));
+    // A port reservation or health probe may still be in flight. It is safe to
+    // await those promises now that `started` and every worker generation have
+    // been invalidated; their callbacks can no longer install replacements.
+    await Promise.allSettled([...this.spawnPromises.values()]);
     this.workerMap.clear();
   }
 
@@ -191,11 +215,18 @@ export class OpenCodePool implements Pool {
     });
     for (const worker of removals) {
       worker.stopped = true;
+      worker.generation = this.nextGeneration(worker.id);
+      if (worker.respawnTimer) {
+        clearTimeout(worker.respawnTimer);
+        worker.respawnTimer = null;
+      }
       worker.status = 'stopped';
       this.emitChange(worker);
       if (worker.pid > 0) killTree(worker.pid);
     }
-    await sleep(300);
+    await Promise.all(removals.map(async (worker) => {
+      if (worker.proc && worker.proc.exitCode === null) await waitForExit(worker.proc);
+    }));
     for (const worker of removals) {
       if (worker.proc && worker.proc.exitCode === null) {
         try {
@@ -255,6 +286,24 @@ export class OpenCodePool implements Pool {
   // ---- internals ----
 
   private async spawnWorker(id: string, attempt = 0): Promise<void> {
+    const pending = this.spawnPromises.get(id);
+    if (pending !== undefined) return pending;
+    const run = this.spawnWorkerOnce(id, attempt);
+    this.spawnPromises.set(id, run);
+    try {
+      await run;
+    } finally {
+      if (this.spawnPromises.get(id) === run) this.spawnPromises.delete(id);
+    }
+  }
+
+  private nextGeneration(id: string): number {
+    const next = (this.generations.get(id) ?? 0) + 1;
+    this.generations.set(id, next);
+    return next;
+  }
+
+  private async spawnWorkerOnce(id: string, _attempt = 0): Promise<void> {
     if (!this.started) return;
     const existing = this.workerMap.get(id);
     // The exit handler marks a dead worker unhealthy before scheduling a
@@ -262,7 +311,13 @@ export class OpenCodePool implements Pool {
     // POSIX child with platform-dependent exitCode/signalCode combinations.
     if (existing && existing.proc && !existing.stopped && existing.status !== 'unhealthy' && existing.status !== 'stopped') return;
 
+    const generation = this.nextGeneration(id);
+
     const port = await getFreePort();
+    // stop()/resize() may have invalidated this generation while the port was
+    // being reserved. Never install a late handle or spawn after lifecycle
+    // ownership has been revoked.
+    if (!this.started || this.generations.get(id) !== generation) return;
     const logFile = join(this.cfg.logDir, `${id}.log`);
     const wd = join(this.cfg.workDir, id);
     mkdirSync(wd, { recursive: true });
@@ -277,9 +332,11 @@ export class OpenCodePool implements Pool {
       startedAt: Date.now(),
       restarts: existing ? existing.restarts + 1 : 0,
       proc: null,
+      generation,
       healthFails: 0,
       lastRestartAt: Date.now(),
       stopped: false,
+      respawnTimer: null,
       parkedUntil: 0,
     };
     this.workerMap.set(id, handle);
@@ -301,6 +358,7 @@ export class OpenCodePool implements Pool {
       proc = spawn(this.cfg.binaryPath, args, {
         cwd: wd,
         windowsHide: true,
+        shell: false,
         stdio: ['ignore', 'pipe', 'pipe'],
       });
     } catch (err) {
@@ -321,11 +379,11 @@ export class OpenCodePool implements Pool {
     });
 
     proc.on('exit', (code, signal) => {
-      if (handle.stopped) return; // deliberate stop
+      if (handle.stopped || this.workerMap.get(id) !== handle || handle.generation !== generation) return; // deliberate or stale generation
       console.warn(`[pool] ${id} exited code=${code} signal=${signal}`);
       handle.status = 'unhealthy';
       this.emitChange(handle);
-      void this.maybeRespawn(id, handle);
+      void this.maybeRespawn(id, handle, generation);
     });
 
     // Wait for readiness: /health 200 within 15s.
@@ -346,8 +404,9 @@ export class OpenCodePool implements Pool {
     killTree(handle.pid);
   }
 
-  private async maybeRespawn(id: string, handle: ManagedWorker): Promise<void> {
-    if (!this.started || handle.stopped) return;
+  private async maybeRespawn(id: string, handle: ManagedWorker, generation: number): Promise<void> {
+    if (!this.started || handle.stopped || this.workerMap.get(id) !== handle || handle.generation !== generation) return;
+    if (handle.respawnTimer !== null) return;
 
     const now = Date.now();
     if (now - handle.lastRestartAt < RESTART_WINDOW_MS) {
@@ -366,19 +425,27 @@ export class OpenCodePool implements Pool {
 
     const delay = backoffMs(handle.restarts);
     console.warn(`[pool] respawning ${id} in ${delay}ms (attempt ${handle.restarts + 1})`);
-    await sleep(delay);
-    if (!this.started || handle.stopped) return;
-    await this.spawnWorker(id, handle.restarts);
+    handle.respawnTimer = setTimeout(() => {
+      handle.respawnTimer = null;
+      if (!this.started || handle.stopped || this.workerMap.get(id) !== handle || handle.generation !== generation) return;
+      void this.spawnWorker(id, handle.restarts);
+    }, delay);
+    handle.respawnTimer.unref();
   }
 
   private async killAndRespawn(w: ManagedWorker): Promise<void> {
     w.stopped = true;
+    w.generation = this.nextGeneration(w.id);
+    if (w.respawnTimer) {
+      clearTimeout(w.respawnTimer);
+      w.respawnTimer = null;
+    }
     w.status = 'stopped';
     this.emitChange(w);
     killTree(w.pid);
-    await sleep(300);
+    if (w.proc && w.proc.exitCode === null) await waitForExit(w.proc);
     w.stopped = false;
-    await this.spawnWorker(w.id);
+    if (this.started) await this.spawnWorker(w.id);
   }
 
   private async healthTick(): Promise<void> {

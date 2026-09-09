@@ -1,0 +1,31 @@
+diff --git a/vendor/deepseek-harness/packages/mcp/mcp-client/src/connection.ts b/vendor/deepseek-harness/packages/mcp/mcp-client/src/connection.ts
+--- a/vendor/deepseek-harness/packages/mcp/mcp-client/src/connection.ts
++++ b/vendor/deepseek-harness/packages/mcp/mcp-client/src/connection.ts
+@@ -123,3 +123,27 @@
+ export function startConnection(ctx: Context, config: Config, policy: ResolvedReconnectPolicy): ConnectionHandle {
+   const label = `mcp-client(${config.serverName})`
++  /**
++   * The web composition keeps Cordis logs out of stdout/stderr.  FreeCode's
++   * desktop shell still needs a bounded, machine-readable readiness signal for
++   * its tray and settings surfaces, so the host opts into this side channel
++   * explicitly.  Standalone upstream consumers remain unaffected.
++   */
++  const publishHostStatus = (
++    state: 'ready' | 'degraded' | 'failed',
++    toolCount: number,
++    error?: string,
++  ): void => {
++    if (process.env.FREECODE_MCP_STATUS_STREAM !== 'stderr') return
++    const record = {
++      serverId: config.serverName,
++      state,
++      toolCount: Math.max(0, Math.min(toolCount, 10_000)),
++      ...error === undefined ? {} : { error: error.slice(0, 1_024) },
++    }
++    try {
++      process.stderr.write(`freecode-mcp-status ${JSON.stringify(record)}\n`)
++    } catch {
++      // A closing Electron pipe must never turn MCP cleanup into a crash.
++    }
++  }
+   const opts: ToolBridgeOptions = {

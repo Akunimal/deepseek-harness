@@ -18,6 +18,10 @@ export type PluginsSettingsLocaleKey =
   | 'subagentModelSelectionPartial' | 'subagentModelSelectionUnavailable'
   | 'subagentModelSelectionUnavailableGroup' | 'subagentModelSelectionEmpty'
   | 'subagentModelSelectionRequired' | 'subagentModelSelectionConflict' | 'subagentModelSelectionOff'
+  | 'mcpTab' | 'mcpTitle' | 'mcpDescription' | 'mcpLoading' | 'mcpUnavailable'
+  | 'mcpRetry' | 'mcpEnabled' | 'mcpDisabled' | 'mcpEnable' | 'mcpDisable'
+  | 'mcpOpenConfig' | 'mcpRefresh' | 'mcpStatusStarting' | 'mcpStatusReady'
+  | 'mcpStatusDegraded' | 'mcpStatusFailed' | 'mcpStatusDisabled' | 'mcpTools'
 
 /** English copy. */
 export const en: Record<PluginsSettingsLocaleKey, string> = {
@@ -77,6 +81,24 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   subagentModelSelectionRequired: 'Select at least one model before saving.',
   subagentModelSelectionConflict: 'Settings changed elsewhere. Discard your draft and try again.',
   subagentModelSelectionOff: 'Subagents use configured defaults or inherit the parent agent\'s model. Saved model choices are retained.',
+  mcpTab: 'MCP',
+  mcpTitle: 'Embedded MCP servers',
+  mcpDescription: 'Serena and free web search are bundled as managed integrations. Toggle them without editing the generated patch.',
+  mcpLoading: 'Loading MCP configuration…',
+  mcpUnavailable: 'MCP configuration is unavailable in this host.',
+  mcpRetry: 'Retry',
+  mcpEnabled: 'Enabled',
+  mcpDisabled: 'Disabled',
+  mcpEnable: 'Enable',
+  mcpDisable: 'Disable',
+  mcpOpenConfig: 'Open MCP configuration',
+  mcpRefresh: 'Refresh',
+  mcpStatusStarting: 'Starting',
+  mcpStatusReady: 'Ready',
+  mcpStatusDegraded: 'Retrying',
+  mcpStatusFailed: 'Failed',
+  mcpStatusDisabled: 'Disabled',
+  mcpTools: 'tools registered',
 }
 
 /** Simplified Chinese copy. */
@@ -137,4 +159,22 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   subagentModelSelectionRequired: '保存前请至少选择一个模型。',
   subagentModelSelectionConflict: '设置已在其他位置更新。请放弃修改后重试。',
   subagentModelSelectionOff: '关闭后，Subagent 使用配置的默认模型或继承父 Agent 的模型；已选模型会保留。',
+  mcpTab: 'MCP',
+  mcpTitle: '内置 MCP 服务器',
+  mcpDescription: 'Serena 和免费网页搜索作为受管理集成随产品提供。无需编辑生成的补丁即可切换。',
+  mcpLoading: '正在加载 MCP 配置…',
+  mcpUnavailable: '当前宿主无法访问 MCP 配置。',
+  mcpRetry: '重试',
+  mcpEnabled: '已启用',
+  mcpDisabled: '已停用',
+  mcpEnable: '启用',
+  mcpDisable: '停用',
+  mcpOpenConfig: '打开 MCP 配置',
+  mcpRefresh: '刷新',
+  mcpStatusStarting: '启动中',
+  mcpStatusReady: '就绪',
+  mcpStatusDegraded: '重试中',
+  mcpStatusFailed: '失败',
+  mcpStatusDisabled: '已停用',
+  mcpTools: '个工具已注册',
 }

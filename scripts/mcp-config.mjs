@@ -2,10 +2,10 @@
  * Built-in MCP catalog and deterministic DSH patch rendering.
  *
  * The catalog deliberately contains commands that are actually published:
- * Serena is installed through its official uv entry point and the LSP bridge
- * is the Go project maintained at isaacphi/mcp-language-server. The old
- * release used two nonexistent npm package names and generated duplicate
- * `mcp-client` YAML keys, so the runtime silently ignored most of the setup.
+ * Serena and free-search are installed through their official uv entry points.
+ * Semantic navigation is intentionally delegated to Serena: maintaining
+ * separate language-server bridges added platform prerequisites and duplicate
+ * semantic-tool surfaces without a product need.
  */
 
 export const MCP_CONFIG_VERSION = 1;
@@ -20,8 +20,11 @@ export const MCP_SERVER_DEFINITIONS = Object.freeze([
     transport: 'stdio',
     serverName: 'serena',
     command: 'uvx',
-    args: ['--from', 'git+https://github.com/oraios/serena', 'serena', 'start-mcp-server', '--context', 'ide-assistant', '--project-from-cwd'],
+    // Electron's cwd is the private DSH_HOME, so project auto-detection would
+    // climb to a drive root and scan the whole disk before MCP readiness.
+    args: ['--from', 'git+https://github.com/oraios/serena', 'serena', 'start-mcp-server', '--context', 'claude-code'],
     cwd: PROCESS_CWD,
+    projectActivation: { toolName: 'activate_project', pathArgument: 'project' },
     install: {
       command: 'uvx',
       args: ['--from', 'git+https://github.com/oraios/serena', 'serena', '--help'],
@@ -29,31 +32,17 @@ export const MCP_SERVER_DEFINITIONS = Object.freeze([
     },
   },
   {
-    id: 'lsp-typescript',
-    description: 'LSP semantic tools for TypeScript and JavaScript',
+    id: 'free-search',
+    description: 'Free HTTP-first web search and fetch for agent research',
     transport: 'stdio',
-    serverName: 'lsp-typescript',
-    command: 'mcp-language-server',
-    args: ['--workspace', PROCESS_CWD, '--lsp', 'typescript-language-server', '--', '--stdio'],
+    serverName: 'free-search',
+    command: 'uvx',
+    args: ['free-search-mcp'],
     cwd: PROCESS_CWD,
     install: {
-      command: 'go',
-      args: ['install', 'github.com/isaacphi/mcp-language-server@latest'],
-      prerequisite: 'Go plus the npm TypeScript language server (npm install --global typescript typescript-language-server)',
-    },
-  },
-  {
-    id: 'lsp-python',
-    description: 'LSP semantic tools for Python',
-    transport: 'stdio',
-    serverName: 'lsp-python',
-    command: 'mcp-language-server',
-    args: ['--workspace', PROCESS_CWD, '--lsp', 'pyright-langserver', '--', '--stdio'],
-    cwd: PROCESS_CWD,
-    install: {
-      command: 'go',
-      args: ['install', 'github.com/isaacphi/mcp-language-server@latest'],
-      prerequisite: 'Go plus the npm Python language server (npm install --global pyright)',
+      command: 'uvx',
+      args: ['free-search-mcp', '--help'],
+      prerequisite: 'uvx (install uv from https://docs.astral.sh/uv/)',
     },
   },
 ]);
@@ -116,6 +105,11 @@ export function renderMcpPatch(config) {
       `    command: ${yamlScalar(server.command)}`,
       `    args: [${server.args.map(renderArg).join(', ')}]`,
       `    cwd: ${renderArg(server.cwd)}`,
+      ...(server.projectActivation === undefined ? [] : [
+        '    projectActivation:',
+        `      toolName: ${yamlScalar(server.projectActivation.toolName)}`,
+        `      pathArgument: ${yamlScalar(server.projectActivation.pathArgument)}`,
+      ]),
       '    failOnStartupError: false',
       '    reconnect:',
       '      enabled: true',

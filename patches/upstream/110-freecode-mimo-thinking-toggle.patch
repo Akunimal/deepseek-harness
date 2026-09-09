@@ -1,0 +1,270 @@
+diff --git a/vendor/deepseek-harness/packages/api/session-controller/src/catalog.ts b/vendor/deepseek-harness/packages/api/session-controller/src/catalog.ts
+index 0c97107f03..f92c582888 100644
+--- a/vendor/deepseek-harness/packages/api/session-controller/src/catalog.ts
++++ b/vendor/deepseek-harness/packages/api/session-controller/src/catalog.ts
+@@ -31,6 +31,9 @@ export async function buildModelCatalog(
+               name: effort.name,
+               ...(effort.description === undefined ? {} : { description: effort.description }),
+             })),
++            ...(resolved.reasoning.control === undefined
++              ? {}
++              : { control: resolved.reasoning.control }),
+             ...(resolved.reasoning.defaultEffort === undefined
+               ? {}
+               : { defaultEffort: resolved.reasoning.defaultEffort }),
+diff --git a/vendor/deepseek-harness/packages/api/session-controller/src/types.ts b/vendor/deepseek-harness/packages/api/session-controller/src/types.ts
+index f421660088..8c7333c476 100644
+--- a/vendor/deepseek-harness/packages/api/session-controller/src/types.ts
++++ b/vendor/deepseek-harness/packages/api/session-controller/src/types.ts
+@@ -115,6 +115,8 @@ export interface ModelReasoningEffort {
+ /** Selectable reasoning metadata for one exact model route. */
+ export interface ModelReasoning {
+   readonly efforts: readonly ModelReasoningEffort[]
++  /** Omit for graded effort levels; use `toggle` for binary thinking APIs. */
++  readonly control?: 'effort' | 'toggle'
+   readonly defaultEffort?: string
+ }
+ 
+diff --git a/vendor/deepseek-harness/packages/client/ui-model-selection/src/client/ModelSelect.tsx b/vendor/deepseek-harness/packages/client/ui-model-selection/src/client/ModelSelect.tsx
+index e910651e86..a26fb6386d 100644
+--- a/vendor/deepseek-harness/packages/client/ui-model-selection/src/client/ModelSelect.tsx
++++ b/vendor/deepseek-harness/packages/client/ui-model-selection/src/client/ModelSelect.tsx
+@@ -80,6 +80,7 @@ export function ModelSelect(
+     : choices.findIndex(c => c.selection.provider === state.current?.provider && c.selection.model === state.current.model)
+   const currentChoice = choices[selectedIndex]
+   const reasoning = currentChoice?.model.reasoning
++  const thinkingToggle = reasoning?.control === 'toggle'
+   const effectiveEffort = state.current?.reasoningEffort ?? reasoning?.defaultEffort
+   const effortLabel = reasoning === undefined
+     ? undefined
+@@ -204,7 +205,7 @@ export function ModelSelect(
+       ? t('trigger.selectAria')
+       : effortLabel === undefined
+         ? t('trigger.aria', { model: modelLabel })
+-        : t('trigger.ariaEffort', { model: modelLabel, effort: effortLabel })
++        : t(thinkingToggle ? 'trigger.ariaThinking' : 'trigger.ariaEffort', { model: modelLabel, effort: effortLabel })
+   itemRefs.current = []
+   let itemIndex = 0
+   const itemRef = () => {
+@@ -242,7 +243,7 @@ export function ModelSelect(
+           id={`${id}-menu`}
+           className={css.menu}
+           role="menu"
+-          aria-label={t('menu.aria')}
++          aria-label={t(thinkingToggle ? 'menu.ariaThinking' : 'menu.aria')}
+           aria-busy={state.status === 'loading' || busy}
+         >
+           {pane === 'root' && (
+@@ -254,7 +255,7 @@ export function ModelSelect(
+               </button>
+               {reasoning !== undefined && (
+                 <button ref={itemRef()} type="button" role="menuitem" className={css.cell} onClick={() => { setPane('effort') }}>
+-                  <span className={css.cellLabel}>{t('menu.effort')}</span>
++                  <span className={css.cellLabel}>{t(thinkingToggle ? 'menu.thinking' : 'menu.effort')}</span>
+                   <span className={css.cellValue}>{effortLabel}</span>
+                   <IconChevronRightOutline14 className={css.cellChevron} />
+                 </button>
+diff --git a/vendor/deepseek-harness/packages/client/ui-model-selection/src/client/locales.ts b/vendor/deepseek-harness/packages/client/ui-model-selection/src/client/locales.ts
+index 3bf0774679..dad17be8d1 100644
+--- a/vendor/deepseek-harness/packages/client/ui-model-selection/src/client/locales.ts
++++ b/vendor/deepseek-harness/packages/client/ui-model-selection/src/client/locales.ts
+@@ -17,9 +17,12 @@ export const zh = {
+   'trigger.selectAria': '选择模型',
+   'trigger.aria': '选择模型，当前 {model}',
+   'trigger.ariaEffort': '选择模型，当前 {model}，推理等级 {effort}',
++  'trigger.ariaThinking': '选择模型，当前 {model}，思考模式 {effort}',
+   'menu.aria': '模型与推理等级',
++  'menu.ariaThinking': '模型与思考模式',
+   'menu.model': '模型',
+   'menu.effort': '推理等级',
++  'menu.thinking': '思考模式',
+   'effort.providerDefault': 'Default',
+   'status.loading': '正在刷新模型列表…',
+   'error.action': '模型操作失败：{message}',
+@@ -42,9 +45,12 @@ export const en = {
+   'trigger.selectAria': 'Select model',
+   'trigger.aria': 'Select model, current {model}',
+   'trigger.ariaEffort': 'Select model, current {model}, reasoning effort {effort}',
++  'trigger.ariaThinking': 'Select model, current {model}, thinking {effort}',
+   'menu.aria': 'Model and reasoning effort',
++  'menu.ariaThinking': 'Model and thinking',
+   'menu.model': 'Model',
+   'menu.effort': 'Effort',
++  'menu.thinking': 'Thinking',
+   'effort.providerDefault': 'Default',
+   'status.loading': 'Refreshing model list…',
+   'error.action': 'Model operation failed: {message}',
+diff --git a/vendor/deepseek-harness/packages/client/ui-model-selection/tests/model-select.client.spec.tsx b/vendor/deepseek-harness/packages/client/ui-model-selection/tests/model-select.client.spec.tsx
+index f30c3f7f3e..03c3e89770 100644
+--- a/vendor/deepseek-harness/packages/client/ui-model-selection/tests/model-select.client.spec.tsx
++++ b/vendor/deepseek-harness/packages/client/ui-model-selection/tests/model-select.client.spec.tsx
+@@ -88,6 +88,41 @@ describe('ModelSelect reasoning effort', () => {
+     })
+   })
+ 
++  it('labels a binary thinking model as Thinking instead of exposing an effort control', () => {
++    const directory = createSnapshotStore(state({
++      groups: [{
++        id: 'mimo',
++        name: 'MiMo',
++        models: [{
++          id: 'mimo-v2.5',
++          name: 'MiMo-V2.5',
++          reasoning: {
++            control: 'toggle',
++            efforts: [{ id: 'off', name: 'Off' }, { id: 'high', name: 'On' }],
++            defaultEffort: 'high',
++          },
++        }],
++      }],
++      current: { provider: 'mimo', model: 'mimo-v2.5', reasoningEffort: 'high' },
++    }))
++    render(<ModelSelect
++      locked={false}
++      available
++      directory={directory}
++      load={vi.fn()}
++      select={vi.fn().mockResolvedValue(true)}
++      t={t}
++    />)
++
++    const trigger = screen.getByRole('button', {
++      name: '选择模型，当前 MiMo-V2.5，思考模式 On',
++    })
++    fireEvent.click(trigger)
++    expect(screen.getByRole('menu', { name: '模型与思考模式' })).toBeTruthy()
++    expect(screen.getByRole('menuitem', { name: /思考模式/ })).toBeTruthy()
++    expect(screen.queryByRole('menuitem', { name: /推理等级/ })).toBeNull()
++  })
++
+   it('offers provider default only when the adapter does not configure a model default', () => {
+     const directory = createSnapshotStore(state({
+       groups: [{
+diff --git a/vendor/deepseek-harness/packages/extensions/tool-cordis/src/api-catalog.ts b/vendor/deepseek-harness/packages/extensions/tool-cordis/src/api-catalog.ts
+index 0ebb3f6692..4d7fcc1cdc 100644
+--- a/vendor/deepseek-harness/packages/extensions/tool-cordis/src/api-catalog.ts
++++ b/vendor/deepseek-harness/packages/extensions/tool-cordis/src/api-catalog.ts
+@@ -4439,7 +4439,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
+   },
+   {
+     name: 'LlmModelReasoningInfo',
+-    declaration: 'export interface LlmModelReasoningInfo {\n    efforts: readonly LlmReasoningEffortInfo[];\n    defaultEffort?: ReasoningEffortId;\n}',
++    declaration: 'export interface LlmModelReasoningInfo {\n    efforts: readonly LlmReasoningEffortInfo[];\n    control?: \'effort\' | \'toggle\';\n    defaultEffort?: ReasoningEffortId;\n}',
+   },
+   {
+     name: 'LlmProviderInfo',
+@@ -4623,7 +4623,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
+   },
+   {
+     name: 'ModelReasoning',
+-    declaration: 'export interface ModelReasoning {\n    readonly efforts: readonly ModelReasoningEffort[];\n    readonly defaultEffort?: string;\n}',
++    declaration: 'export interface ModelReasoning {\n    readonly efforts: readonly ModelReasoningEffort[];\n    readonly control?: \'effort\' | \'toggle\';\n    readonly defaultEffort?: string;\n}',
+   },
+   {
+     name: 'ModelReasoningEffort',
+diff --git a/vendor/deepseek-harness/packages/llm/llm-pi-ai/src/adapter.ts b/vendor/deepseek-harness/packages/llm/llm-pi-ai/src/adapter.ts
+index e20b8e0072..01ceb3027b 100644
+--- a/vendor/deepseek-harness/packages/llm/llm-pi-ai/src/adapter.ts
++++ b/vendor/deepseek-harness/packages/llm/llm-pi-ai/src/adapter.ts
+@@ -190,12 +190,19 @@ function reasoningInfo(
+ ): Pick<LlmResolvedModelInfo, 'reasoning'> | Record<string, never> {
+   if (!model.reasoning) return {}
+   const levels = getSupportedThinkingLevels(model)
++  const compat = model.compat as { thinkingFormat?: string; supportsReasoningEffort?: boolean } | undefined
++  const control = compat?.thinkingFormat === 'deepseek' && compat.supportsReasoningEffort === false
++    ? 'toggle' as const
++    : 'effort' as const
+   return {
+     reasoning: {
+       efforts: levels.map(level => ({
+         id: ReasoningEffortId(level),
+-        name: `${level.charAt(0).toUpperCase()}${level.slice(1)}`,
++        name: control === 'toggle'
++          ? level === 'off' ? 'Off' : 'On'
++          : `${level.charAt(0).toUpperCase()}${level.slice(1)}`,
+       })),
++      control,
+       ...defaultLevel === undefined ? {} : { defaultEffort: ReasoningEffortId(defaultLevel) },
+     },
+   }
+diff --git a/vendor/deepseek-harness/packages/llm/llm-pi-ai/tests/adapter.spec.ts b/vendor/deepseek-harness/packages/llm/llm-pi-ai/tests/adapter.spec.ts
+index a54ec17697..85e99c27cc 100644
+--- a/vendor/deepseek-harness/packages/llm/llm-pi-ai/tests/adapter.spec.ts
++++ b/vendor/deepseek-harness/packages/llm/llm-pi-ai/tests/adapter.spec.ts
+@@ -675,6 +675,59 @@ describe('provider profile lifecycle', () => {
+     expect(server.requests[1]).not.toHaveProperty('reasoning_effort')
+   })
+ 
++  it('uses MiMo V2.5 thinking on/off without exposing reasoning_effort on the wire', async () => {
++    vi.stubEnv('PI_TEST_KEY', 'test-key')
++    const server = await mockServer([{ events: textEvents }, { events: textEvents }])
++    const ctx = new Context()
++    await ctx.plugin(LlmRuntime)
++    await ctx.plugin(LlmPiAi, {
++      providers: {
++        'mimo-gateway': {
++          apiKeyEnv: 'PI_TEST_KEY',
++          api: 'openai-completions',
++          baseURL: `${server.url}/v1`,
++          compat: { thinkingFormat: 'deepseek' },
++          models: [{
++            id: 'mimo-v2.5',
++            contextWindow: 65_536,
++            maxTokens: 4096,
++            reasoningEfforts: { off: null, high: 'high' },
++            compat: { thinkingFormat: 'deepseek', supportsReasoningEffort: false },
++          }],
++        },
++      },
++    })
++
++    await expect(ctx.llm.resolveModelInfo('mimo-gateway', 'mimo-v2.5'))
++      .resolves.toMatchObject({
++        reasoning: {
++          control: 'toggle',
++          efforts: [
++            { id: ReasoningEffortId('off'), name: 'Off' },
++            { id: ReasoningEffortId('high'), name: 'On' },
++          ],
++        },
++      })
++
++    await assemble(ctx, {
++      provider: 'mimo-gateway',
++      model: 'mimo-v2.5',
++      reasoningEffort: ReasoningEffortId('high'),
++      messages: [],
++    })
++    expect(server.requests[0]).toMatchObject({ thinking: { type: 'enabled' } })
++    expect(server.requests[0]).not.toHaveProperty('reasoning_effort')
++
++    await assemble(ctx, {
++      provider: 'mimo-gateway',
++      model: 'mimo-v2.5',
++      reasoningEffort: ReasoningEffortId('off'),
++      messages: [],
++    })
++    expect(server.requests[1]).toMatchObject({ thinking: { type: 'disabled' } })
++    expect(server.requests[1]).not.toHaveProperty('reasoning_effort')
++  })
++
+   it('keeps the system role on a declared route whose gateway rejects the developer one', async () => {
+     vi.stubEnv('PI_TEST_KEY', 'test-key')
+     const server = await mockServer([{ events: textEvents }, { events: textEvents }])
+diff --git a/vendor/deepseek-harness/packages/llm/llm/src/types.ts b/vendor/deepseek-harness/packages/llm/llm/src/types.ts
+index c480f57b89..376e39fb5b 100644
+--- a/vendor/deepseek-harness/packages/llm/llm/src/types.ts
++++ b/vendor/deepseek-harness/packages/llm/llm/src/types.ts
+@@ -329,6 +329,12 @@ export interface LlmReasoningEffortInfo {
+ export interface LlmModelReasoningInfo {
+   /** Supported efforts in adapter-preferred display order. */
+   efforts: readonly LlmReasoningEffortInfo[]
++  /**
++   * Presentation control for the model selector. Omission means a graded
++   * effort selector; `toggle` means the values are a provider's binary
++   * thinking switch and must not be presented as tunable effort tiers.
++   */
++  control?: 'effort' | 'toggle'
+   /**
+    * Adapter-configured default materialized into requests when callers omit
+    * an effort. Absence preserves the provider's own default.

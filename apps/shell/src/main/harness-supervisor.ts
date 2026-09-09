@@ -1,6 +1,7 @@
 import { spawn, ChildProcess } from 'node:child_process';
 import { join } from 'node:path';
 import { mkdirSync } from 'node:fs';
+import type { McpRuntimeStatus } from '@freecode/shared-types';
 
 /**
  * Harness supervisor — owns the `dsh web` child process.
@@ -34,6 +35,8 @@ export interface HarnessSupervisorConfig {
   restartBudget?: number;
   /** Structured logger piped to app.log by the shell. */
   log?: (level: 'debug' | 'info' | 'warn' | 'error', msg: string, meta?: Record<string, unknown>) => void;
+  /** Receives live MCP readiness/failure evidence parsed from dsh output. */
+  onMcpStatus?: (status: McpRuntimeStatus) => void;
 }
 
 export interface HarnessInstance {
@@ -49,7 +52,10 @@ export interface HarnessInstance {
 
 export type HarnessStatus = 'stopped' | 'starting' | 'ready' | 'unhealthy';
 
-const READY_RE = /(?:dsh web: )?(?:ready on )?(http:\/\/127\.0\.0\.1:\d+)/;
+// dsh web prints a one-shot launch URL with a process token. Preserve the
+// query string: the embedded WebContentsView must exchange that token for
+// its authenticated session cookie before loading the clean root page.
+const READY_RE = /(?:dsh web: )?(?:ready on )?(http:\/\/127\.0\.0\.1:\d+\/\?token=[^\s)]+)/;
 // A cold Windows profile boot can materialize hundreds of workspace modules
 // before the web server prints its URL. Thirty seconds caused the supervisor
 // to kill a healthy first boot, then hide the real startup latency behind
@@ -68,6 +74,18 @@ export const DSH_WEB_ARGS = [
   '127.0.0.1',
   '--no-open',
 ] as const;
+
+/**
+ * Every process owned by the desktop shell is a background implementation
+ * detail. Keep this policy in one exported seam so a future spawn refactor
+ * cannot accidentally bring back flashing/closing console windows on Win32.
+ * `shell: false` also prevents command strings from being routed through
+ * cmd.exe, which would create an extra visible console in some environments.
+ */
+export const HIDDEN_CHILD_PROCESS_OPTIONS = {
+  windowsHide: true,
+  shell: false,
+} as const;
 
 /**
  * Electron GUI processes do not own a durable console stream. On Windows the
@@ -94,9 +112,12 @@ export class HarnessSupervisor {
   private startedAt = 0;
   private stopping = false;
   private restartTimer: NodeJS.Timeout | null = null;
+  private generation = 0;
+  private spawnPromise: Promise<void> | null = null;
   private readyListeners = new Set<(h: HarnessInstance) => void>();
   private stuckListeners = new Set<(h: HarnessInstance) => void>();
   private outBuffer = '';
+  private mcpLineBuffer = '';
   private lifecycleLock: Promise<void> = Promise.resolve();
 
   constructor(config: HarnessSupervisorConfig) {
@@ -111,6 +132,16 @@ export class HarnessSupervisor {
     return this.url;
   }
 
+  /** Process id for black-box lifecycle/window probes; null while stopped. */
+  get currentPid(): number | null {
+    return this.proc?.pid ?? null;
+  }
+
+  /** Replace child-only environment for the next generation. */
+  updateExtraEnv(extraEnv: Record<string, string>): void {
+    this.cfg = { ...this.cfg, extraEnv: { ...extraEnv } };
+  }
+
   async start(): Promise<void> {
     if (this.status === 'starting' || (this.proc && this.proc.exitCode === null)) return;
     await this.withLock(async () => {
@@ -123,6 +154,8 @@ export class HarnessSupervisor {
   async stop(): Promise<void> {
     await this.withLock(async () => {
       this.stopping = true;
+      // Invalidate exit/readiness callbacks from the generation being stopped.
+      this.generation++;
       if (this.restartTimer) {
         clearTimeout(this.restartTimer);
         this.restartTimer = null;
@@ -133,14 +166,19 @@ export class HarnessSupervisor {
       this.url = null;
       if (proc && proc.exitCode === null) {
         killTree(proc.pid ?? -1);
-        await sleep(1_500);
+        await waitForExit(proc);
       }
+      if (this.spawnPromise) await this.spawnPromise;
     });
   }
 
   async restart(): Promise<void> {
     await this.withLock(async () => {
-      this.stopping = false;
+      // Treat restart as a stop followed by a new generation. The old exit
+      // handler must not be allowed to schedule a second spawn while the
+      // explicit restart is starting its replacement.
+      this.stopping = true;
+      this.generation++;
       if (this.restartTimer) {
         clearTimeout(this.restartTimer);
         this.restartTimer = null;
@@ -148,9 +186,13 @@ export class HarnessSupervisor {
       if (this.proc && this.proc.exitCode === null) {
         const old = this.proc;
         this.proc = null;
+        this.status = 'stopped';
+        this.url = null;
         killTree(old.pid ?? -1);
-        await sleep(300);
+        await waitForExit(old);
       }
+      if (this.spawnPromise) await this.spawnPromise;
+      this.stopping = false;
       await this.spawn();
     });
   }
@@ -181,10 +223,27 @@ export class HarnessSupervisor {
 
   private async spawn(): Promise<void> {
     if (this.stopping) return;
+    if (this.proc && this.proc.exitCode === null) return;
+    if (this.spawnPromise) return this.spawnPromise;
+
+    const pending = this.spawnOnce();
+    this.spawnPromise = pending;
+    try {
+      await pending;
+    } finally {
+      if (this.spawnPromise === pending) this.spawnPromise = null;
+    }
+  }
+
+  private async spawnOnce(): Promise<void> {
+    if (this.stopping || (this.proc && this.proc.exitCode === null)) return;
+
+    const generation = ++this.generation;
 
     this.status = 'starting';
     this.url = null;
     this.outBuffer = '';
+    this.mcpLineBuffer = '';
     mkdirSync(this.cfg.homeDir, { recursive: true });
     this.startedAt = Date.now();
 
@@ -223,7 +282,7 @@ export class HarnessSupervisor {
       proc = spawn(this.cfg.nodePath, [this.cfg.cliEntry, ...dshArgs], {
         env,
         cwd: this.cfg.homeDir,
-        windowsHide: process.platform === 'win32',
+        ...HIDDEN_CHILD_PROCESS_OPTIONS,
         stdio: ['ignore', 'pipe', 'pipe'],
       });
     } catch (err) {
@@ -233,44 +292,61 @@ export class HarnessSupervisor {
     }
     this.proc = proc;
 
-    proc.stdout?.on('data', (chunk: Buffer) => {
-      const text = chunk.toString();
-      writeConsoleDiagnostic(process.stdout, `[dsh] ${text}`);
-      this.cfg.log?.('debug', text.trimEnd());
-      this.outBuffer += text;
-      if (this.outBuffer.length > 65_536) this.outBuffer = this.outBuffer.slice(-32_768);
-      this.tryGrabs();
-    });
-    proc.stderr?.on('data', (chunk: Buffer) => {
-      const text = chunk.toString();
-      writeConsoleDiagnostic(process.stderr, `[dsh:err] ${text}`);
-      this.cfg.log?.('warn', `dsh stderr: ${text.trimEnd()}`);
-      this.outBuffer += text;
-      if (this.outBuffer.length > 65_536) this.outBuffer = this.outBuffer.slice(-32_768);
-      this.tryGrabs();
-    });
+    proc.stdout?.on('data', (chunk: Buffer) => this.recordOutput(chunk.toString(), 'debug', process.stdout, '[dsh] '));
+    proc.stderr?.on('data', (chunk: Buffer) => this.recordOutput(chunk.toString(), 'warn', process.stderr, '[dsh:err] '));
 
     proc.on('exit', (code, signal) => {
-      if (this.stopping) return; // deliberate
+      if (this.stopping || generation !== this.generation || this.proc !== proc) return;
+      this.proc = null;
       console.warn(`[supervisor] dsh exited code=${code} signal=${signal}`);
-      this.cfg.log?.('error', 'dsh exited', { code, signal, tail: this.outBuffer.slice(-4000) });
+      this.cfg.log?.('error', 'dsh exited', {
+        code,
+        signal,
+        generation,
+        tail: this.outBuffer.slice(-4000),
+      });
       if (this.status === 'ready') {
         this.status = 'unhealthy';
       } else {
         this.status = 'stopped';
       }
       this.url = null;
-      void this.maybeRespawn();
+      void this.maybeRespawn(generation);
     });
 
-    // Readiness deadline: if no `dsh web: http://...` line within 30s, kill and respawn.
+    // Readiness deadline: if no `dsh web: http://...` line within the bounded
+    // cold-start window, kill and respawn.
     setTimeout(() => {
-      if (this.proc === proc && this.status === 'starting' && proc.exitCode === null) {
-        console.error('[supervisor] dsh did not report readiness in 30s, killing');
-        this.cfg.log?.('error', 'dsh readiness timeout', { tail: this.outBuffer.slice(-4000) });
+      if (this.generation === generation && this.proc === proc && this.status === 'starting' && proc.exitCode === null) {
+        console.error(`[supervisor] dsh did not report readiness in ${READY_TIMEOUT_MS}ms, killing`);
+        this.cfg.log?.('error', 'dsh readiness timeout', {
+          generation,
+          tail: this.outBuffer.slice(-4000),
+        });
         killTree(proc.pid ?? -1); // exit handler respawns
       }
     }, READY_TIMEOUT_MS).unref();
+
+    // `spawn()` reports an invalid executable/cwd asynchronously through the
+    // ChildProcess error event. A try/catch around spawn() cannot catch that
+    // path; without this handler Electron sees an unhandled ENOENT and the
+    // supervisor never reaches its bounded restart/stuck contract.
+    proc.once('error', (error: NodeJS.ErrnoException) => {
+      if (this.stopping || generation !== this.generation || this.proc !== proc) return;
+      this.proc = null;
+      this.url = null;
+      this.status = 'unhealthy';
+      const code = error.code ?? 'SPAWN_ERROR';
+      const message = error.message.slice(0, 1_024);
+      console.error(`[supervisor] dsh spawn error ${code}: ${message}`);
+      this.cfg.log?.('error', 'dsh spawn error', {
+        code,
+        message,
+        generation,
+        tail: this.outBuffer.slice(-4_000),
+      });
+      void this.maybeRespawn(generation);
+    });
   }
 
   private tryGrabs(): void {
@@ -290,8 +366,88 @@ export class HarnessSupervisor {
     for (const cb of this.readyListeners) cb(inst);
   }
 
-  private async maybeRespawn(): Promise<void> {
-    if (this.stopping) return;
+  /**
+   * Keep the child completely pipe-driven. The MCP bridge writes its explicit
+   * FreeCode status contract to stderr (Cordis logs are not guaranteed to be
+   * attached to the dsh process streams); the legacy human-readable parser is
+   * retained for upstream compositions that do expose those lines.
+   */
+  private recordOutput(
+    text: string,
+    level: 'debug' | 'warn',
+    stream: NodeJS.WriteStream,
+    prefix: string,
+  ): void {
+    writeConsoleDiagnostic(stream, `${prefix}${text}`);
+    this.cfg.log?.(level, level === 'warn' ? `dsh stderr: ${text.trimEnd()}` : text.trimEnd());
+    this.outBuffer += text;
+    if (this.outBuffer.length > 65_536) this.outBuffer = this.outBuffer.slice(-32_768);
+    this.mcpLineBuffer += text;
+    const lines = this.mcpLineBuffer.split(/\r?\n/);
+    this.mcpLineBuffer = lines.pop() ?? '';
+    for (const line of lines) this.parseMcpStatus(line);
+    this.tryGrabs();
+  }
+
+  private parseMcpStatus(line: string): void {
+    const hostStatus = line.match(/^freecode-mcp-status (\{.*\})$/)?.[1];
+    if (hostStatus !== undefined) {
+      try {
+        const record = JSON.parse(hostStatus) as {
+          serverId?: unknown;
+          state?: unknown;
+          toolCount?: unknown;
+          error?: unknown;
+        };
+        if (
+          typeof record.serverId === 'string'
+          && /^[A-Za-z0-9_-]{1,32}$/.test(record.serverId)
+          && (record.state === 'ready' || record.state === 'degraded' || record.state === 'failed')
+          && typeof record.toolCount === 'number'
+          && Number.isInteger(record.toolCount)
+          && record.toolCount >= 0
+        ) {
+          this.cfg.onMcpStatus?.({
+            serverId: record.serverId,
+            state: record.state,
+            toolCount: Math.min(record.toolCount, 10_000),
+            ...(typeof record.error === 'string' ? { error: record.error.slice(0, 1_024) } : {}),
+          });
+        }
+      } catch {
+        // Ignore malformed status lines; the child remains diagnosable through
+        // the bounded supervisor output tail.
+      }
+      return;
+    }
+    const server = line.match(/mcp-client\(([A-Za-z0-9_-]{1,32})\)/)?.[1];
+    if (server === undefined) return;
+    const ready = line.match(/: ready; initialize -> tools\/list -> schema validation -> (\d+) tool\(s\) registered/);
+    if (ready !== null) {
+      this.cfg.onMcpStatus?.({ serverId: server, state: 'ready', toolCount: Number(ready[1]) });
+      return;
+    }
+    if (/: giving up after /.test(line)) {
+      this.cfg.onMcpStatus?.({
+        serverId: server,
+        state: 'failed',
+        toolCount: 0,
+        error: line.slice(-1_024),
+      });
+      return;
+    }
+    if (/: (?:connection attempt failed|connection failed; retrying|connection lost; reconnecting)/.test(line)) {
+      this.cfg.onMcpStatus?.({
+        serverId: server,
+        state: 'degraded',
+        toolCount: 0,
+        error: line.slice(-1_024),
+      });
+    }
+  }
+
+  private async maybeRespawn(generation: number): Promise<void> {
+    if (this.stopping || generation !== this.generation || this.proc) return;
     const now = Date.now();
     if (now - this.lastRestartAt >= RESTART_WINDOW_MS) {
       this.restarts = 0;
@@ -312,20 +468,34 @@ export class HarnessSupervisor {
     console.warn(`[supervisor] respawn in ${delay}ms (attempt ${this.restarts})`);
     this.restartTimer = setTimeout(() => {
       this.restartTimer = null;
+      if (this.stopping || generation !== this.generation || this.proc) return;
       void this.spawn();
     }, delay);
     this.restartTimer.unref();
   }
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((r) => setTimeout(r, ms));
+function waitForExit(proc: ChildProcess, timeoutMs = STOP_GRACE_MS): Promise<void> {
+  if (proc.exitCode !== null || proc.signalCode !== null) return Promise.resolve();
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (): void => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve();
+    };
+    const timer = setTimeout(finish, timeoutMs);
+    timer.unref();
+    proc.once('exit', finish);
+    proc.once('close', finish);
+  });
 }
 
 function killTree(pid: number): void {
   try {
     if (process.platform === 'win32') {
-      spawn('taskkill', ['/T', '/F', '/PID', String(pid)], { windowsHide: true });
+      spawn('taskkill', ['/T', '/F', '/PID', String(pid)], { windowsHide: true, shell: false });
     } else {
       try {
         process.kill(pid, 'SIGTERM');

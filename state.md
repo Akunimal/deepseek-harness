@@ -1,6 +1,12 @@
-# Estado de traspaso — FreeCode DeepSeek Harness
+# Estado de traspaso histórico — FreeCode DeepSeek Harness
 
-# v0.5.0 — 2026-09-06
+> La fuente vigente para la implementación Windows-only 0.5.0 es
+> [`docs/STATE-0.5.0.md`](docs/STATE-0.5.0.md) y su orden de ejecución es
+> [`docs/ROADMAP-0.5.0.md`](docs/ROADMAP-0.5.0.md). El historial debajo conserva
+> evidencia de releases anteriores y no debe interpretarse como que Gemini2API,
+> LSP independientes o builds Linux/macOS forman parte de 0.5.0.
+
+# v0.5.0 — 2026-09-09
 
 ## Estado actual de la release
 
@@ -8,16 +14,23 @@
 **Fecha:** 2026-09-06
 **Rama:** `main`
 
-### Etapas completadas
+### Registro histórico de la release (no es el estado final de 0.5.0)
+
+La evidencia final está cerrada en `docs/STATE-0.5.0.md`: el `release:gate`
+Windows terminó con código 0, el runtime MCP real registró Serena y
+free-search, y el smoke de instalación NSIS limpia pasó. Las notas antiguas de
+esta sección conservan decisiones intermedias y no describen el payload final.
 
 1. **Review de código** — Auditoría exhaustiva del codebase completo (56 hallazgos). 6 Critical, 26 Warning, 24 Info. Todos los fixes críticos implementados.
 2. **Reforzar contratos** — ChatMessage cross-validation, FreeCodeApi.restartWorker, Zod validation en IPC, WorkerHandle sync docs.
 3. **Upstream sync** — Sync completo de vendor/deepseek-harness de upstream v0.1.1-rc.2 → v0.1.3-alpha.1 (2063 commits, ~8000 archivos). Ahora a paridad con upstream master. Parches locales re-aplicados.
-4. **Reasoning policy** — Soporte para modelos thinking de terceros (mimo-v2.5, qwen*think, gemini*thinking) con vocabulario off/low/high.
+4. **Reasoning policy** — DeepSeek conserva `off/low/high/max`; MiMo-V2.5 es
+   thinking binario (`thinking.type` enabled/disabled) y no usa ni recibe
+   `reasoning_effort`; Qwen/Gemini thinking conservan `off/low/high`.
 5. **Gemini text-only** — Endpoint Gemini Web documentado como solo texto. defaultInput: ['text'].
 6. **OCR con Tesseract** — Módulo ocr.ts, IPC channels ocr:extract/ocr:status, preload bridge.
 7. **MCP servers** — Serena MCP + LSP MCP Server preinstall con script setup-mcp-servers.mjs.
-8. **Documentación** — CHANGELOG, state.md, REVIEW.md, mcp-servers.md actualizados.
+8. **Documentación histórica** — CHANGELOG, state.md, REVIEW.md, mcp-servers.md actualizados.
 
 ### Fixes de seguridad y estabilidad
 
@@ -28,10 +41,12 @@
 - Atomic write en model-refresher
 - Memory leak fixes (TorFleet onChange, lb sticky sessions)
 
-### Pendiente para v0.5.0
+### Cierre de esta auditoría
 
-- Build de desktop (`pnpm build:desktop`)
-- GitHub Release con assets
+- Build desktop, runtime y binarios Windows NSIS/portable: completados localmente.
+- Gate completo e instalación limpia: pasaron el 2026-09-09.
+- Tag/release GitHub: queda para el commit final revisado y sólo con assets
+  Windows x64; no se usan workflows.
 
 ---
 
@@ -205,7 +220,13 @@ La ruta `sandbox-windows-acl` no se modificó: su documentación registra que `C
 ### Lo que está corregido
 
 - `FALLBACK_MODELS` del seeder ahora usa `x-preview-f`.
-- `model-refresher.ts` usa una política común: publica `off/low/high/max` solo para modelos `deepseek-*` y declara `reasoningEfforts: false` para todos los demás.
+- `model-refresher.ts` usa una política común: publica `off/low/high/max` para
+  `deepseek-*`, `off/high` únicamente como alias interno de on/off para MiMo
+  (con `supportsReasoningEffort: false`) y `off/low/high` para Qwen/Gemini
+  thinking. Los demás modelos declaran `reasoningEfforts: false`.
+- Para MiMo el adaptador selecciona el dialecto DeepSeek sólo para obtener
+  `thinking.type`; el request nunca incluye `reasoning_effort`. El alias
+  interno `high` no se presenta como un nivel graduable de MiMo.
 - `provider-seeder.ts` migra settings existentes: quita el `reasoning` de ruta heredado, normaliza la capacidad por modelo y elimina un `agent-default-model.reasoningEffort` que no corresponde a un modelo DeepSeek.
 - El adaptador `llm-pi-ai` ya no reaplica un default de ruta viejo a un modelo que no declara razonamiento; un effort explícito incompatible sigue fallando con `UNSUPPORTED_REASONING_EFFORT`.
 - El runtime upstream, incluido en `vendor` y regenerado en `apps/shell/resources/freecode/dsh`, elimina `reasoningEffort` cuando el modelo no declara soporte.

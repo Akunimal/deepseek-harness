@@ -20,7 +20,7 @@ import { ToolListChangedNotificationSchema } from '@modelcontextprotocol/sdk/typ
 import type { Context } from '@deepseek-ai/cordis'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import { createTransport } from './transport.ts'
-import { syncTools } from './tools.ts'
+import { createProjectActivationState, syncTools } from './tools.ts'
 import type { ToolBridgeOptions, ToolDisposers } from './tools.ts'
 import type { Config } from './index.ts'
 
@@ -122,10 +122,38 @@ export interface ConnectionHandle {
  */
 export function startConnection(ctx: Context, config: Config, policy: ResolvedReconnectPolicy): ConnectionHandle {
   const label = `mcp-client(${config.serverName})`
+  /**
+   * The web composition keeps Cordis logs out of stdout/stderr.  FreeCode's
+   * desktop shell still needs a bounded, machine-readable readiness signal for
+   * its tray and settings surfaces, so the host opts into this side channel
+   * explicitly.  Standalone upstream consumers remain unaffected.
+   */
+  const publishHostStatus = (
+    state: 'ready' | 'degraded' | 'failed',
+    toolCount: number,
+    error?: string,
+  ): void => {
+    if (process.env.FREECODE_MCP_STATUS_STREAM !== 'stderr') return
+    const record = {
+      serverId: config.serverName,
+      state,
+      toolCount: Math.max(0, Math.min(toolCount, 10_000)),
+      ...error === undefined ? {} : { error: error.slice(0, 1_024) },
+    }
+    try {
+      process.stderr.write(`freecode-mcp-status ${JSON.stringify(record)}\n`)
+    } catch {
+      // A closing Electron pipe must never turn MCP cleanup into a crash.
+    }
+  }
   const opts: ToolBridgeOptions = {
     registrationFailure: 'contain',
     serverName: config.serverName,
     toolCallTimeoutMs: config.toolCallTimeoutMs,
+    ...(config.projectActivation === undefined ? {} : {
+      projectActivation: config.projectActivation,
+      projectActivationState: createProjectActivationState(),
+    }),
   }
   // The initial sync uses 'throw' when failOnStartupError is configured, so
   // a registration conflict propagates to the startup-await path. Re-syncs
@@ -211,11 +239,13 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
         disposers = new Map()
       })
       ctx.logger.error(`${label}: giving up after ${policy.maxAttempts} consecutive failed reconnect attempts — tools unregistered; reload the plugin or restart the Host to reconnect`)
+      publishHostStatus('failed', 0, `giving up after ${policy.maxAttempts} consecutive failed reconnect attempts`)
       return
     }
     const delayMs = Math.min(policy.maxDelayMs, policy.initialDelayMs * 2 ** (failedAttempts - 1))
     const action = lostEstablishedConnection ? 'connection lost; reconnecting' : 'connection failed; retrying'
     ctx.logger.warn(`${label}: ${action} in ${delayMs}ms (attempt ${failedAttempts}/${policy.maxAttempts})`)
+    publishHostStatus('degraded', 0, action)
     reconnectTimer = setTimeout(() => {
       reconnectTimer = undefined
       settling = connectGeneration(false)
@@ -243,6 +273,7 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
     let attemptSettled = false
     let closeObserved = false
     const hasClosed = (): boolean => closeObserved
+    if (opts.projectActivationState !== undefined) opts.projectActivationState.activeProject = undefined
     client = generation
     clientClosed = closed.promise
     generation.onclose = () => {
@@ -268,19 +299,31 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
         }
       },
     )
+    const transport = createTransport(config)
+    let stderrTail = ''
+    transport.stderr?.on('data', (chunk: Buffer | string) => {
+      // Retain enough context for one actionable failure without turning a
+      // noisy third-party server into an unbounded log or memory sink.
+      stderrTail = `${stderrTail}${String(chunk)}`.slice(-4_096)
+    })
     try {
-      await generation.connect(createTransport(config))
+      await generation.connect(transport)
       if (hasClosed()) {
         attemptSettled = true
         generationDown(generation)
         return
       }
       await enqueueSync(generation, startup ? startupOpts : opts)
+      ctx.logger.info(`${label}: ready; initialize -> tools/list -> schema validation -> ${disposers.size} tool(s) registered`)
+      publishHostStatus('ready', disposers.size)
     } catch (error) {
       if (firstAttemptError === undefined) firstAttemptError = error
       // Disposal clears current ownership before it closes the generation, so
       // only a live supervisor reports an attempt failure.
-      if (isCurrent(generation)) ctx.logger.warn(`${label}: connection attempt failed: ${String(error)}`)
+      if (isCurrent(generation)) {
+        const diagnostic = stderrTail.trim()
+        ctx.logger.warn(`${label}: connection attempt failed: ${String(error)}${diagnostic ? `\n${diagnostic}` : ''}`)
+      }
       try { await generation.close() } catch { /* transport already gone */ }
       const quiesced = hasClosed() || await waitForClose(closed.promise)
       attemptSettled = true
@@ -301,7 +344,7 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
     }
     if (!isCurrent(generation)) return
     connectedAt = Date.now()
-    if (failedAttempts > 0) ctx.logger.info(`${label}: reconnected and re-synced tools (attempt ${failedAttempts}/${policy.maxAttempts})`)
+    if (failedAttempts > 0) ctx.logger.info(`${label}: reconnected and re-synced tools (attempt ${failedAttempts}/${policy.maxAttempts}; ${disposers.size} tool(s) registered)`)
   }
 
   /** The in-flight (or last settled) connection attempt; dispose awaits it for quiescence. */

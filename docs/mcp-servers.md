@@ -1,31 +1,42 @@
-# FreeCode DeepSeek Harness — MCP servers
+# FreeCode DeepSeek Harness — managed MCP servers
 
-FreeCode bundles the MCP client bridge and its versioned catalog. On first
-application boot the catalog is materialized in the Harness user home and all
-three entries are enabled:
+FreeCode ships the MCP client bridge and a versioned product catalog. On first
+boot it materializes two entries, enabled by default:
 
 ```text
 <Electron userData>/dsh-home/mcp/servers.json
 <Electron userData>/dsh-home/cordis.patch.yml
 ```
 
-The portable build uses its `data/dsh-home` directory. A source checkout uses
-the configured `DSH_HOME` (normally `~/.dsh` when the upstream CLI supplies the
-default).
+The portable build uses `data/dsh-home`. The generated patch contains only the
+marked FreeCode block; user-owned rows survive upgrades and toggles.
 
-## Enable or disable a server
+## Included catalog
 
-Edit `mcp/servers.json` and change only the `enabled` boolean. The app keeps
-the catalog definitions product-owned, writes the JSON atomically, and
-regenerates only the block between:
+| ID | Server process | Purpose | Default |
+|---|---|---|---|
+| `serena` | `uvx` → official `oraios/serena` | Semantic retrieval and structural editing. | Enabled |
+| `free-search` | `uvx free-search-mcp` | HTTP-first search/fetch for agent research without opening a browser. | Enabled |
+
+Independent LSP MCP rows are intentionally not included. Serena provides the
+semantic project tools and avoids two competing language-server surfaces.
+Gemini2API and Gemini selector models are not part of 0.5.0.
+
+## Configuration and status
+
+Open Settings → Plugins → MCP. The tab shows each toggle, command, live state,
+registered tool count, the latest bounded error and the exact config path. The
+tray reports how many enabled servers are ready. A server is not called ready
+when its process merely exists; readiness requires:
 
 ```text
-# BEGIN FREECODE MANAGED MCP
-# END FREECODE MANAGED MCP
+spawn → initialize → tools/list → schema validation → tool registration
 ```
 
-in `cordis.patch.yml`. Any unrelated user patch rows remain intact. Restart
-FreeCode after changing the file so the Harness reloads the patch.
+The setting change writes JSON atomically, refreshes the child environment and
+restarts only the Harness child. The Electron shell, pool and user data remain
+alive. Manual edits should change only `enabled`; restart FreeCode after a
+manual edit.
 
 Example:
 
@@ -34,50 +45,67 @@ Example:
   "version": 1,
   "servers": [
     { "id": "serena", "enabled": true },
-    { "id": "lsp-typescript", "enabled": false },
-    { "id": "lsp-python", "enabled": true }
+    { "id": "free-search", "enabled": true }
   ]
 }
 ```
 
-For a repository checkout, the deterministic setup helper is:
+The deterministic checkout helper is:
 
-```sh
+```powershell
 pnpm setup:mcp --all
 ```
 
-It merges the same managed block and preserves unrelated user configuration.
-The helper writes files with restrictive permissions where the platform
-supports them, uses argument arrays rather than shell interpolation, and
+It uses argument arrays, restrictive file permissions where supported and
 fails closed for a selected server whose prerequisite cannot be installed.
 
-## Included catalog
+## Serena project lifecycle
 
-| ID | Server process | Purpose | Default |
-|---|---|---|---|
-| `serena` | `uvx` → official `oraios/serena` | Semantic retrieval and structural editing. | Enabled |
-| `lsp-typescript` | `mcp-language-server` + `typescript-language-server` | TypeScript/JavaScript definitions, references, rename, and diagnostics. | Enabled |
-| `lsp-python` | `mcp-language-server` + `pyright-langserver` | Python definitions, references, rename, and diagnostics. | Enabled |
+The Electron Harness child starts Serena without `--project-from-cwd`. Its cwd
+is the private `dsh-home`, so automatic discovery would walk toward a drive
+root and scan unrelated files. When the model calls a Serena tool, the bridge
+reads the session workspace, canonicalizes it (absolute/real path where
+available), calls `activate_project`, and then calls the requested tool in one
+serialized queue. A second project activates only after the prior operation is
+finished. Activation failures are visible to both model and user.
 
-The client bridge, catalog, enable/disable location, and managed patch are
-preinstalled and active. The external server executables are not silently
-downloaded into the desktop installer: they have platform-specific runtimes
-and their own dependency chains. This is why the app can boot safely with the
-entries enabled while a missing executable remains an explicit, recoverable
-diagnostic instead of corrupting the main install.
+This preserves project-on-demand behavior without spawning a second Serena or
+opening a terminal window. The process stays under the one `dsh` child tree,
+uses `shell:false`/`windowsHide:true`, and reconnects with bounded attempts.
 
-## Prerequisites for the external processes
+## free-search and uvx
 
-- Serena: `uv`/`uvx`; see the [official uv documentation](https://docs.astral.sh/uv/).
-- LSP bridge: Go and the official
-  [`isaacphi/mcp-language-server`](https://github.com/isaacphi/mcp-language-server)
-  project.
-- TypeScript LSP: `npm install --global typescript typescript-language-server`.
-- Python LSP: `npm install --global pyright`.
+`free-search` is the no-browser research route. Its default HTTP engines do
+not need a browser or a Gemini key. A browser is opened only when the user
+explicitly asks to view a result.
 
-Serena's client guidance and `uvx` invocation are documented by the
-[official Serena client documentation](https://oraios.github.io/serena/02-usage/030_clients.html).
+On Windows FreeCode first reuses a user-installed `uvx.exe`. If absent, the
+shell silently downloads the pinned official uv ZIP over HTTPS, verifies its
+SHA-256 and extracts `uvx.exe` into a per-user tools directory. It does not
+mutate `PATH`, require administrator rights or open a console. Failure is
+recoverable: the application still boots, and the MCP tab/log reports the
+missing prerequisite.
 
-The old `@anthropic-ai/serena-mcp` and `@isaacphi/mcp-language-server` npm
-package assumptions are intentionally not used by v0.5.0; they were invalid
-as an installation strategy.
+The uv bootstrap is a product dependency for MCP startup; Serena and
+free-search remain separately toggleable. It is not a reason to install a
+second FreeCode application instance.
+
+## Tool-call contract
+
+Every bridged call records a bounded machine-readable record containing
+`requestId`, server, raw tool, attempt, status and duration. Status values are:
+
+```text
+success
+failed-local
+failed-mcp
+failed-provider
+failed-timeout
+failed-permission
+failed-invalid-response
+```
+
+Empty/legacy/malformed responses are explicit invalid-response failures. A
+retry is allowed only for a transient error and is bounded; side-effecting
+tools are not blindly repeated. Arguments, image bytes and sensitive OCR text
+are not placed in the log.

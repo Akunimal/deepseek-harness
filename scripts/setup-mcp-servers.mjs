@@ -26,10 +26,6 @@ const MCP_CONFIG_DIR = join(DSH_HOME, 'mcp');
 const MCP_CONFIG = join(MCP_CONFIG_DIR, 'servers.json');
 const CORDIS_PATCH = join(DSH_HOME, 'cordis.patch.yml');
 
-function npmCommand() {
-  return process.platform === 'win32' ? 'npm.cmd' : 'npm';
-}
-
 function readExistingConfig() {
   if (!existsSync(MCP_CONFIG)) return defaultMcpConfig();
   try {
@@ -71,30 +67,12 @@ function install(server) {
   }
 }
 
-function installLspDependencies() {
-  try {
-    execFileSync(npmCommand(), ['install', '--global', '--no-audit', '--no-fund', 'typescript', 'typescript-language-server', 'pyright'], {
-      cwd: DSH_HOME,
-      stdio: 'inherit',
-      timeout: 300_000,
-      windowsHide: true,
-    });
-    return true;
-  } catch (error) {
-    console.error(`  Failed to install LSP language-server dependencies: ${error instanceof Error ? error.message : String(error)}`);
-    return false;
-  }
-}
-
 function selectedIds(args) {
   if (args.includes('--all') || args.length === 0) return new Set(MCP_SERVER_DEFINITIONS.map((server) => server.id));
   const selected = new Set();
   if (args.includes('--serena')) selected.add('serena');
-  if (args.includes('--lsp')) {
-    selected.add('lsp-typescript');
-    selected.add('lsp-python');
-  }
-  if (selected.size === 0) throw new Error('use --all, --serena, or --lsp');
+  if (args.includes('--search')) selected.add('free-search');
+  if (selected.size === 0) throw new Error('use --all, --serena, or --search');
   return selected;
 }
 
@@ -104,11 +82,8 @@ function main() {
   const config = readExistingConfig();
   const results = new Map();
 
-  if (selected.has('serena')) results.set('serena', install(MCP_SERVER_DEFINITIONS.find((server) => server.id === 'serena')));
-  if (selected.has('lsp-typescript') || selected.has('lsp-python')) {
-    const dependenciesOk = installLspDependencies();
-    results.set('lsp-typescript', dependenciesOk && install(MCP_SERVER_DEFINITIONS.find((server) => server.id === 'lsp-typescript')));
-    results.set('lsp-python', dependenciesOk && install(MCP_SERVER_DEFINITIONS.find((server) => server.id === 'lsp-python')));
+  for (const server of MCP_SERVER_DEFINITIONS) {
+    if (selected.has(server.id)) results.set(server.id, install(server));
   }
 
   for (const server of config.servers) {

@@ -4439,7 +4439,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'LlmModelReasoningInfo',
-    declaration: 'export interface LlmModelReasoningInfo {\n    efforts: readonly LlmReasoningEffortInfo[];\n    defaultEffort?: ReasoningEffortId;\n}',
+    declaration: 'export interface LlmModelReasoningInfo {\n    efforts: readonly LlmReasoningEffortInfo[];\n    control?: \'effort\' | \'toggle\';\n    defaultEffort?: ReasoningEffortId;\n}',
   },
   {
     name: 'LlmProviderInfo',
@@ -4623,7 +4623,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ModelReasoning',
-    declaration: 'export interface ModelReasoning {\n    readonly efforts: readonly ModelReasoningEffort[];\n    readonly defaultEffort?: string;\n}',
+    declaration: 'export interface ModelReasoning {\n    readonly efforts: readonly ModelReasoningEffort[];\n    readonly control?: \'effort\' | \'toggle\';\n    readonly defaultEffort?: string;\n}',
   },
   {
     name: 'ModelReasoningEffort',

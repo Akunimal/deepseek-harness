@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -65,7 +65,16 @@ function stageHasPlatform(platform: string): boolean {
   return existsSync(join(STAGE_MODULES, firstDir.split('/').slice(0, 2).join('/')));
 }
 
-describe('runtime stage native binaries', { skip: !stageHasPlatform(process.platform) }, () => {
+describe('runtime stage native binaries', () => {
+  beforeAll(() => {
+    // Windows is the only 0.5.0 release target. A missing Windows stage is a
+    // hard failure; Linux/macOS checks below are explicitly out of scope and
+    // must not hide a missing release runtime.
+    if (process.platform === 'win32') {
+      expect(stageHasPlatform('win32'), `missing Windows native runtime under ${STAGE_MODULES}`).toBe(true);
+    }
+  });
+
   it('stage contains native binaries for the host platform at minimum', () => {
     const host = process.platform;
     const target = NATIVE_TARGETS[host];
@@ -78,7 +87,7 @@ describe('runtime stage native binaries', { skip: !stageHasPlatform(process.plat
   });
 
   for (const [platform, spec] of Object.entries(NATIVE_TARGETS)) {
-    describe(platform, { skip: !stageHasPlatform(platform) }, () => {
+    describe(platform, { skip: platform !== 'win32' }, () => {
       for (const relDir of spec.dirs) {
         const absDir = join(STAGE_MODULES, relDir);
 

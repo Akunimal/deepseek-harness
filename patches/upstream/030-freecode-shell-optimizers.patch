@@ -374,7 +374,7 @@ index 064f124a00..d4a58d5403 100644
      maxSpillBytes: z.number().default(DEFAULT_MAX_SPILL_BYTES),
      graceMs: z.number().default(DEFAULT_GRACE_MS),
 +    rtk: z.boolean().default(true),
-+    caveman: z.boolean().default(false),
++    caveman: z.boolean().default(true),
    })
 
    /** The currently authoritative config: the settings section, or the composition entry. */
@@ -477,7 +477,7 @@ index 5f6464b1c8..31015ab48a 100644
      const bench = await boot()
      expect(bench.bash.config.timeoutMs).toBe(60_000)
 +    expect(bench.bash.config.rtk).toBe(true)
-+    expect(bench.bash.config.caveman).toBe(false)
++    expect(bench.bash.config.caveman).toBe(true)
 
      await bench.ctx.settings.update(SHELL_SETTINGS_NAMESPACE, { timeoutMs: 5_000 })
 
@@ -529,7 +529,7 @@ index 93133b37af..17d2b979a3 100644
      graceMs: z.number().default(DEFAULT_GRACE_MS),
      pwshPath: z.string(),
 +    rtk: z.boolean().default(true),
-+    caveman: z.boolean().default(false),
++    caveman: z.boolean().default(true),
    })
 
    /** The currently authoritative config: the settings section, or the composition entry. */
@@ -576,7 +576,7 @@ index 22a4effe0a..9d8db8488c 100644
      const bench = await boot()
      expect(bench.pwsh.config.timeoutMs).toBe(60_000)
 +    expect(bench.pwsh.config.rtk).toBe(true)
-+    expect(bench.pwsh.config.caveman).toBe(false)
++    expect(bench.pwsh.config.caveman).toBe(true)
 
      await bench.ctx.settings.update(SHELL_SETTINGS_NAMESPACE, { timeoutMs: 5_000 })
 

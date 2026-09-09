@@ -1,97 +1,155 @@
 # Architecture
 
-FreeCode DeepSeek Harness is an Electron shell around the upstream DeepSeek Harness web application. The shell owns local process lifecycle, provider wiring, secrets, model discovery, import/continuation helpers, packaging, and native desktop affordances. The upstream subtree owns the agent runtime and the conversation web product.
+FreeCode DeepSeek Harness is a Windows Electron shell around the upstream
+DeepSeek Harness web application. The shell owns native lifecycle, the local
+OpenCode-compatible pool, secrets, model discovery, MCP configuration,
+packaging and tray/UI affordances. The upstream subtree owns the agent runtime
+and conversation web product.
 
 ```mermaid
 flowchart LR
   UI[DSH web conversation UI] -->|HTTP / API RPC| DSH[dsh web child]
-  DSH -->|OPENCODE2API_LB_URL| LB[local load balancer]
+  DSH -->|OPENCODE2API_LB_URL| LB[loopback load balancer]
   LB --> POOL[opencode2api worker pool]
-  POOL --> O[OpenCode-compatible providers]
+  POOL --> O[OpenCode Free providers]
+  DSH -->|stdio MCP| SERENA[Serena]
+  DSH -->|stdio MCP| SEARCH[free-search]
   SHELL[Electron main + preload] --> DSH
   SHELL --> LB
   SHELL --> POOL
   SHELL --> VAULT[secret store]
-  SHELL --> DATA[userData logs / dsh-home]
-  SHELL --> GEMINI[gemini-web2api optional Python service]
-  GEMINI --> GOOGLE[Gemini Web]
+  SHELL --> DATA[userData / dsh-home / logs]
 ```
 
 ## Runtime sequence
 
-1. Electron resolves a development resource root or packaged `resources/freecode`.
-2. The shell starts the `opencode2api` pool and exposes a loopback load balancer.
-3. The shell creates the non-sensitive `FREECODE_PUBLIC_KEY=public` vault default when no user key exists. `dsh web --host 127.0.0.1 --port 0` then starts with `OPENCODE2API_LB_URL` and the resolved secret environment; the pool forwards `Bearer public` to OpenCode's free catalog.
-4. The supervisor waits for the upstream readiness URL and opens a hardened `BrowserWindow` with context isolation, no Node integration, sandboxing, and the preload bridge.
-5. Provider seeding writes the OpenCode Free pool to a schema-compatible internal `deepseek-free` route. The internal key is retained for upstream compatibility; the visible provider is `OpenCode Free Pool`. Model refresh probes every visible model and keeps the catalog plus `settings.yaml` synchronized without deleting user providers.
-6. Provider seeding also writes the optional `gemini-web` route at `http://127.0.0.1:8081/v1`. If Python 3 and the vendored source are available, the shell starts `python -m gemini_web2api`; otherwise the route remains configured for an externally managed instance. Its static model listing is refreshed without issuing one generation request per model.
-7. The browser talks to the harness web server. The shell does not reimplement upstream conversation rendering; it packages the upstream UI and applies the lightweight per-conversation CSS motion layer in `ui-conversation`.
+1. Electron resolves development resources or packaged `resources/freecode`.
+2. The shell starts the local worker pool and loopback load balancer.
+3. The supervisor starts `dsh web --host 127.0.0.1 --port 0 --no-open` with a
+   whitelisted environment and waits for its authenticated readiness URL.
+4. The shell opens one hardened `BrowserWindow` with context isolation, no Node
+   integration, renderer sandboxing and the preload bridge.
+5. Provider seeding maintains the OpenCode Free route and removes only the
+   managed legacy `gemini-web` route. Gemini2API is not started, packaged or
+   exposed by 0.5.0.
+6. The managed MCP catalog is materialized under `dsh-home/mcp/servers.json`.
+   Standard mounts Serena and free-search only when their persisted flags are
+   enabled. The bridge reports a server ready only after
+   `initialize → tools/list → schema validation → registration`.
+7. Serena receives the canonicalized session workspace immediately before its
+   first tool call for that workspace. Activation and the dependent call share
+   one serialized queue, so concurrent sessions cannot switch Serena between
+   activation and use.
 
-## Process ownership
+## Process ownership and headless policy
 
-- `apps/shell/src/main/index.ts`: Electron lifecycle, window, tray, menu, overlay, notifications, updates, and logging.
-- `apps/shell/src/main/runtime.ts`: composition of pool, load balancer, and harness supervisor.
-- `apps/shell/src/main/harness-supervisor.ts`: readiness, stop, restart, backoff, and restart budget for `dsh web`.
-- `apps/shell/src/main/gemini-web2api-supervisor.ts`: optional Python provider lifecycle, loopback config, readiness check, and graceful shutdown.
-- `packages/opencode-adapter`: worker spawn, health checks, respawn budget, round-robin selection, sticky session routing, SSE proxying.
-- `packages/shared-types`: zod-backed IPC and chat interchange contracts.
-- `packages/chat-importer`: OpenCode SQLite and ChatML conversion into `InterchangeChat`.
-- `packages/workspace-bridge`: import/continuation routing into an existing OpenCode workspace.
-- `vendor/deepseek-harness`: upstream runtime and web client, vendored as a subtree.
-- `vendor/gemini-web2api`: pinned MIT-licensed Gemini Web2API source copied into packaged resources for the optional local provider.
+- `apps/shell/src/main/index.ts`: Electron lifecycle, one native window, tray,
+  menus, notifications, updater and logging.
+- `apps/shell/src/main/runtime.ts`: composition of pool, load balancer,
+  supervisor and live MCP status projection.
+- `apps/shell/src/main/harness-supervisor.ts`: readiness, generations, restart
+  budget, tree termination and no-window child spawning.
+- `packages/opencode-adapter`: worker spawn, health, respawn, round-robin and
+  process-tree termination.
+- `packages/shared-types`: zod-backed IPC and runtime status contracts.
+- `vendor/deepseek-harness`: upstream runtime and web client, kept as a subtree.
+- `vendor/deepseek-harness/packages/mcp/mcp-client`: MCP initialization,
+  schema discovery, project activation and classified tool-call bridge.
+- `vendor/deepseek-harness/packages/llm/llm/src/ocr.ts`: bounded direct OCR
+  helper used by text-only image paths.
+
+All implementation children use `windowsHide:true` and `shell:false`. The shell
+does not use `cmd.exe`, `start`, a terminal window or a browser to implement
+background work. The supervisor and worker pool track process generations,
+coalesce pending spawns and wait for the old tree to exit before replacement.
+
+## MCP configuration and observability
+
+The managed files are:
+
+```text
+<userData>/dsh-home/mcp/servers.json
+<userData>/dsh-home/cordis.patch.yml
+```
+
+Settings → Plugins → MCP exposes toggles, live state, tool count, errors and
+the config path. The tray shows the count of enabled MCP servers that are
+ready. A failed connection produces a native notification once per failure
+state and remains visible in the tab and app log. The generated block is
+atomic and unrelated user patch rows are preserved.
 
 ## Model-facing output compression
 
-The shell can optionally use [RTK (Rust Token Killer)](https://github.com/rtk-ai/rtk)
-to reduce the amount of plain CLI output returned to the model context. The
-`rtk` setting is exposed by both the Bash and Windows PowerShell providers and
-defaults to enabled, but the feature is a no-op unless an `rtk` executable is
-already installed on `PATH`. FreeCode never bundles, downloads, or installs
-that executable.
+The Bash and Windows PowerShell providers expose independent RTK and Caveman
+settings. Both schema toggles default to enabled; each wrapper is a no-op when
+its executable is not installed. RTK remains optional and is never advertised
+as used merely because its setting is enabled. Only eligible plain commands are
+wrapped; pipes, redirects, substitutions and other shell syntax remain
+unchanged. FreeCode does not silently install either external optimizer.
 
-When enabled and available, the provider prefixes only allowlisted plain
-commands such as `git`, `gh`, `pnpm`, `rg`, and `vitest`. Commands containing
-pipes, redirects, substitutions, or other shell metacharacters are passed
-through unchanged so RTK cannot alter compound-command semantics. The setting
-is read live after changes in Settings; detection of the executable is cached
-per executor. RTK reduces tool-output tokens, not the model's response or the
-Harness's automatic compaction threshold.
+## OCR boundary
 
-## Resource layouts
+Windows packaging includes Tesseract and English trained data under
+`resources/freecode/tesseract`. The helper receives a validated absolute image
+path, bounded language/PSM arguments and a timeout. Image size, OCR output and
+cache size are bounded; image bytes and OCR contents are never written to the
+application log. Vision routes keep the image. Text-only routes receive OCR
+text for both direct attachments and `read_image`, with explicit errors when
+the helper is unavailable or returns empty/invalid output.
 
-Development uses `apps/shell/resources/opencode2api/*` and the source tree under `vendor/deepseek-harness`. A packaged build uses:
+## Resource layout
 
 ```text
 resources/freecode/
-  opencode2api/<platform-binary>
-  gemini-web2api/gemini_web2api/*.py  # optional provider source
+  opencode2api/<windows-binary>
+  tesseract/tesseract.exe
+  tesseract/*.dll
+  tesseract/tessdata/eng.traineddata
   dsh/apps/cli/lib/bin.js
-  dsh/packages/**/node_modules/@deepseek-ai/*  # workspace links
+  dsh/packages/**/node_modules/@deepseek-ai/*
   runtime-manifest.json
 ```
 
-The provider's mutable configuration lives outside the package at
-`<userData>/gemini-web2api/config.json`. FreeCode creates a loopback-only
-default (`127.0.0.1`, port 8081) and preserves user edits. `FREECODE_GEMINI_WEB2API_PORT`
-and `FREECODE_GEMINI_WEB2API_PYTHON` can override the port or interpreter.
-
-The complete workspace install is deliberate. A production-only pnpm install leaves upstream workspace links unresolved and causes boot failures.
+The complete workspace install is deliberate: production-only dependency
+installation can leave upstream workspace links unresolved and make boot fail.
+Portable builds place `data/` beside the executable. NSIS uses the normal
+per-user Windows application data path.
 
 ## Security boundaries
 
-- The renderer receives only `window.freecode` from preload.
-- Secrets are read from the host vault and injected into child process environments; they are not written into `process.env` by the resolver.
-- All local services bind to `127.0.0.1`.
-- The optional Gemini Web2API process receives a user-data config and is only
-  started when a Python 3 interpreter is discoverable; it is not a required
-  dependency of the default OpenCode Free path.
-- The updater performs one automatic check at startup and every six hours; an in-flight guard prevents overlapping checks, and the native download arrow beside Settings is the confirmation surface.
-- The web harness remains responsible for upstream permission, sandbox, filesystem, and tool policies.
+- The renderer receives only `window.freecode` from the isolated preload.
+- Secrets are read from the host vault and injected into child environments;
+  they are not copied into global `process.env`.
+- Local services bind to loopback.
+- MCP server arguments are arrays, not shell strings, and their stderr is
+  bounded. Tool-call logs omit arguments and image data.
+- OCR validates paths, size and output and does not log sensitive content.
+- Upstream permission, sandbox, filesystem and confirmation policy remains
+  authoritative. FreeCode does not silently widen sandbox access.
+- The updater checks at startup and every six hours, uses an in-flight guard,
+  and shows download/install progress through the tray and native notices.
 
-## Portable pool controls
+## Upstream and modular patches
 
-The pool exposes a live 1..16 worker-slot setting through the desktop overlay and typed preload IPC. The default is four. A slot is a local `opencode2api` process, not a newly provisioned OpenCode account: the public route uses the same `Bearer public` identity and remains subject to upstream quota and IP-based rate limits. The slider changes concurrency only; it cannot bypass those limits.
+`vendor/deepseek-harness` is updated first. Product changes are then applied in
+sorted `patches/upstream/*.patch` order by the idempotent, vendor-scoped patch
+applier. The intended flow is:
 
-Windows portable builds receive `PORTABLE_EXECUTABLE_DIR` from electron-builder and place `data/` beside the executable. `FREECODE_PORTABLE_DIR` can be used by a manually launched packaged app to select the same behavior. The binaries, Electron runtime, upstream CLI, web app, and native dependencies are packaged together so the user does not need a developer toolchain.
+```text
+upstream fetch/subtree update
+  → pnpm apply:upstream-patches
+  → pnpm prepare:upstream
+  → tests/typecheck/build/package
+```
 
-The permission boundary is intentionally inherited from upstream: approvals, permission presets, sandbox modes, filesystem policy, tool confirmations, and escalation remain the DeepSeek Harness contracts. The shell's Electron sandbox protects the renderer but does not silently alter agent permissions.
+Patches are incremental: a later patch assumes earlier patches, never rewrites
+the entire vendor tree, and must include a focused contract test. Direct vendor
+edits are temporary working changes until represented by a patch. See
+[`docs/UPSTREAM-PATCHING.md`](UPSTREAM-PATCHING.md).
+
+## Windows release scope
+
+0.5.0 publishes only Windows x64 NSIS and portable artifacts. Linux/macOS are
+contributor-only manual builds and have no release gate, no binary upload and
+no claim of parity. The final local gate is documented in
+[`docs/ROADMAP-0.5.0.md`](ROADMAP-0.5.0.md).

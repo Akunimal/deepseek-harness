@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll } from 'vitest';
 import { spawnSync, spawn, ChildProcess } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -23,7 +23,8 @@ const TIMEOUT_MS = 30_000;
 // ---------------------------------------------------------------------------
 // 1. dsh CLI flags → if upstream renames --port/--host, adapt webStartup
 // ---------------------------------------------------------------------------
-describe.skipIf(!HARNESS_BUILT)('contract: dsh CLI flags', () => {
+describe('contract: dsh CLI flags', () => {
+  beforeAll(() => expect(HARNESS_BUILT, `missing built dsh CLI: ${CLI_ENTRY}`).toBe(true));
   it('dsh web --help exposes --port and --host', { timeout: 65_000 }, () => {
     const r = spawnSync(NODE, [CLI_ENTRY, 'web', '--help'], {
       encoding: 'utf8',
@@ -39,7 +40,8 @@ describe.skipIf(!HARNESS_BUILT)('contract: dsh CLI flags', () => {
 // 2. Boot readiness → supervisor readiness regex; if the line changes, adapt
 //    harness-supervisor.ts READY_RE
 // ---------------------------------------------------------------------------
-describe.skipIf(!HARNESS_BUILT)('contract: boot readiness', () => {
+describe('contract: boot readiness', () => {
+  beforeAll(() => expect(HARNESS_BUILT, `missing built dsh CLI: ${CLI_ENTRY}`).toBe(true));
   it('dsh web prints readiness URL on stdout within 30s', async () => {
     const home = mkdtempSync(join(tmpdir(), 'dsh-contract-'));
     const proc = spawn(NODE, [CLI_ENTRY, 'web', '--host', '127.0.0.1', '--port', '0'], {
@@ -88,7 +90,8 @@ describe('contract: settings.yaml schema', () => {
 //         adapt workspace-bridge rpc-client + seeder
 //       workspace-bridge rpc-client + seeder
 // ---------------------------------------------------------------------------
-describe.skipIf(!HARNESS_BUILT)('contract: host RPC + provider registration', () => {
+describe('contract: host RPC + provider registration', () => {
+  beforeAll(() => expect(HARNESS_BUILT, `missing built dsh CLI: ${CLI_ENTRY}`).toBe(true));
   it('POST /api/llm/listConfigurableProviders answers the client-request envelope', async () => {
     const home = mkdtempSync(join(tmpdir(), 'dsh-contract-provider-'));
     // Seed $DSH_HOME/settings.yaml the way provider-seeder does: the
@@ -163,7 +166,8 @@ describe.skipIf(!HARNESS_BUILT)('contract: host RPC + provider registration', ()
 //    graph being valid JSON with stable entry fields. If this changes, adapt
 //    the packaged-web boot contract before shipping a release.
 // ---------------------------------------------------------------------------
-describe.skipIf(!HARNESS_BUILT)('contract: browser boot manifest', () => {
+describe('contract: browser boot manifest', () => {
+  beforeAll(() => expect(HARNESS_BUILT, `missing built dsh CLI: ${CLI_ENTRY}`).toBe(true));
   const BootEntrySchema = z.object({
     id: z.string().min(1),
     url: z.string().startsWith('/plugins/'),

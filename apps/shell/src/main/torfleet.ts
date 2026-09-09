@@ -107,7 +107,7 @@ export class TorFleet {
       if (inst.proc && inst.proc.exitCode === null) {
         try {
           if (process.platform === 'win32') {
-            spawn('taskkill', ['/T', '/F', '/PID', String(inst.pid)], { windowsHide: true });
+            spawn('taskkill', ['/T', '/F', '/PID', String(inst.pid)], { windowsHide: true, shell: false });
           } else {
             inst.proc.kill('SIGTERM');
           }
@@ -180,6 +180,7 @@ export class TorFleet {
       proc = spawn(this.cfg.torBinaryPath, ['-f', torrcPath], {
         cwd: instanceDir,
         windowsHide: true,
+        shell: false,
         stdio: ['ignore', 'pipe', 'pipe'],
       });
     } catch (err) {
@@ -211,7 +212,7 @@ export class TorFleet {
       if (proc.exitCode === null) {
         try {
           if (process.platform === 'win32') {
-            spawn('taskkill', ['/T', '/F', '/PID', String(handle.pid)], { windowsHide: true });
+            spawn('taskkill', ['/T', '/F', '/PID', String(handle.pid)], { windowsHide: true, shell: false });
           } else {
             proc.kill('SIGTERM');
           }

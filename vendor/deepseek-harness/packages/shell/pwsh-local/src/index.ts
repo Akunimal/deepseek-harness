@@ -144,7 +144,7 @@ export class PwshLocalExecutor extends ShellExecutor {
     graceMs: z.number().default(DEFAULT_GRACE_MS),
     pwshPath: z.string(),
     rtk: z.boolean().default(true),
-    caveman: z.boolean().default(false),
+    caveman: z.boolean().default(true),
   })
 
   /** The currently authoritative config: the settings section, or the composition entry. */

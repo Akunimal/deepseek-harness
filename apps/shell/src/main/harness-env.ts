@@ -2,6 +2,7 @@
 
 export interface DialogBridgeEnv {
   endpoint: string
+  fileOpenEndpoint: string
   token: string
 }
 
@@ -15,6 +16,7 @@ export function buildHarnessExtraEnv(dialogBridge: DialogBridgeEnv | null): Reco
     DSH_CLIENT_TITLE: 'FreeCode',
     ...(dialogBridge ? {
       FREECODE_DIALOG_BRIDGE_ENDPOINT: dialogBridge.endpoint,
+      FREECODE_FILE_OPEN_ENDPOINT: dialogBridge.fileOpenEndpoint,
       FREECODE_DIALOG_BRIDGE_TOKEN: dialogBridge.token,
     } : {}),
   }

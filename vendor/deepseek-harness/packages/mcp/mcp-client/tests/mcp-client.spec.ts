@@ -129,11 +129,11 @@ async function mountRichRegistry(): Promise<{ ctx: Context; attachments: Recordi
   return { ctx, attachments: ctx.attachments as RecordingAttachmentStore }
 }
 
-/** Calling-agent stand-in with no durable request header yet. */
-function agentOn(model: string | undefined = 'vision'): object {
+/** Calling-agent stand-in with a durable workspace header. */
+function agentOn(model: string | undefined = 'vision', cwd = '/workspace/project'): object {
   return {
     options: model === undefined ? {} : { provider: 'visual', model },
-    session: { requestHeader: () => undefined },
+    session: { header: { cwd }, requestHeader: () => undefined },
   }
 }
 
@@ -412,6 +412,37 @@ describe('tool execution', () => {
       undefined,
       expect.objectContaining({ timeout: 60_000 }),
     )
+  })
+
+  it('emits one redacted, machine-readable tool-call contract record', async () => {
+    const info = vi.spyOn(ctx.logger, 'info').mockImplementation(() => undefined)
+    const client = createMockClient(
+      [{ name: 'contract', inputSchema: { type: 'object' } }],
+      { content: [{ type: 'text', text: 'ok' }] },
+    )
+    await syncTools(client as never, ctx, defaultOpts, new Map())
+    await ctx.tools.execute({
+      signal: testToolSignal,
+      callId: ToolCallId('contract-call'),
+      name: 'mcp__srv__contract',
+      arguments: { secret: 'must not be logged' },
+    })
+
+    const line = info.mock.calls
+      .map(call => call.map(value => String(value)).join(' '))
+      .find(value => value.startsWith('mcp tool call '))
+    expect(line).toBeDefined()
+    const record = JSON.parse(line!.slice('mcp tool call '.length)) as Record<string, unknown>
+    expect(record).toMatchObject({
+      requestId: 'contract-call',
+      server: 'srv',
+      tool: 'contract',
+      attempt: 1,
+      status: 'success',
+    })
+    expect(record).not.toHaveProperty('secret')
+    expect(record.durationMs).toEqual(expect.any(Number))
+    info.mockRestore()
   })
 
   it('sends the raw name for normalized public names', async () => {
@@ -823,12 +854,12 @@ describe('tool execution', () => {
         inputSchema: { type: 'object' },
         outputSchema: { type: 'object', patternProperties: { '^x-': { type: 'string' } } },
       }],
-      { content: [], structuredContent: ['kept', { nested: true }] },
+      { content: [{ type: 'text', text: 'kept' }], structuredContent: ['kept', { nested: true }] },
     )
     await syncTools(client as never, ctx, defaultOpts, new Map())
     const result = await ctx.tools.execute({ signal: testToolSignal, callId: ToolCallId('fallback'), name: 'mcp__srv__future-schema', arguments: {} })
     if (result.isError) throw new Error('unsupported MCP output schemas must fall back')
-    expect(result.value).toEqual({ content: [], structuredContent: ['kept', { nested: true }] })
+    expect(result.value).toEqual({ content: [{ type: 'text', text: 'kept' }], structuredContent: ['kept', { nested: true }] })
   })
 
   it('maps isError to an error result via throw', async () => {
@@ -876,6 +907,33 @@ describe('tool execution', () => {
       undefined,
       expect.objectContaining({ signal: controller.signal }),
     )
+  })
+
+  it('automatically activates the calling session workspace before Serena tools', async () => {
+    const client = createMockClient([
+      { name: 'activate_project', inputSchema: { type: 'object' } },
+      { name: 'get_current_config', inputSchema: { type: 'object' } },
+    ])
+    const opts: ToolBridgeOptions = {
+      ...defaultOpts,
+      serverName: 'serena',
+      projectActivation: { toolName: 'activate_project', pathArgument: 'project' },
+    }
+    await syncTools(client as never, ctx, opts, new Map())
+
+    const result = await ctx.tools.execute({
+      signal: testToolSignal,
+      callId: ToolCallId('serena-config'),
+      name: 'mcp__serena__get_current_config',
+      arguments: {},
+      agent: agentOn('vision', 'C:\\Projects\\Hermes') as never,
+    })
+
+    expect(result.isError).toBe(false)
+    expect(client.callTool.mock.calls.slice(0, 2).map(call => call[0])).toEqual([
+      { name: 'activate_project', arguments: { project: 'C:\\Projects\\Hermes' } },
+      { name: 'get_current_config', arguments: {} },
+    ])
   })
 
   it('handles legacy toolResult shape', async () => {
@@ -1052,7 +1110,8 @@ describe('tool execution edge cases', () => {
     await syncTools(client as never, ctx, defaultOpts, new Map())
     const result = await ctx.tools.execute({ signal: testToolSignal, callId: ToolCallId('c1'), name: 'mcp__srv__empty_tool', arguments: {} })
 
-    expect(result.content[0]).toEqual({ type: 'text', text: '(empty_tool returned no model-visible content)' })
+    expect(result.isError).toBe(true)
+    expect(result.content[0]).toEqual({ type: 'text', text: 'Error: empty_tool returned an empty MCP response' })
   })
 
 
@@ -1065,7 +1124,8 @@ describe('tool execution edge cases', () => {
     await syncTools(client as never, ctx, defaultOpts, new Map())
     const result = await ctx.tools.execute({ signal: testToolSignal, callId: ToolCallId('c1'), name: 'mcp__srv__legacy2', arguments: {} })
 
-    expect(result.content[0]).toEqual({ type: 'text', text: '(no output)' })
+    expect(result.isError).toBe(true)
+    expect(result.content[0]).toEqual({ type: 'text', text: 'Error: legacy2 returned an empty MCP response' })
   })
 
   it('handles a legacy result with neither content nor toolResult', async () => {
@@ -1077,7 +1137,8 @@ describe('tool execution edge cases', () => {
     await syncTools(client as never, ctx, defaultOpts, new Map())
     const result = await ctx.tools.execute({ signal: testToolSignal, callId: ToolCallId('legacy-empty'), name: 'mcp__srv__legacy-empty', arguments: {} })
 
-    expect(result.content[0]).toEqual({ type: 'text', text: '(no output)' })
+    expect(result.isError).toBe(true)
+    expect(result.content[0]).toEqual({ type: 'text', text: 'Error: legacy-empty returned an invalid response without content' })
   })
 
   it('handles isError with non-text content (fallback error message)', async () => {

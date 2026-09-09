@@ -1,29 +1,33 @@
 # Changelog
 
-## 0.5.0 — 2026-09-07
+## 0.5.0 — 2026-09-09
 
 ### Added / Agregado
 
-- **OCR module** — New `ocr.ts` module wrapping system Tesseract CLI for text
-  extraction from images. Exposes `ocr:extract` and `ocr:status` IPC channels
-  with preload bridge support. Supports Windows/macOS/Linux with configurable
-  language. / Módulo OCR que envuelve el CLI de Tesseract para extracción de
-  texto de imágenes.
+- **OCR module** — Bundled Windows Tesseract provides bounded OCR for direct
+  image attachments and `read_image` when the model is text-only. Vision models
+  retain the image; missing/empty/timeout/oversized OCR is explicit. / Tesseract
+  viene incluido en Windows para adjuntos directos y `read_image` cuando el
+  modelo es text-only; los fallos de OCR son explícitos.
 
-- **Embedded MCP configuration** — The client bridge and catalog are shipped,
-  materialized on first boot, and enabled by default under the user's
-  `dsh-home`. `servers.json` exposes independent `enabled` switches for Serena,
-  TypeScript LSP, and Python LSP; the managed Cordis patch preserves unrelated
-  user rows. The external executables remain explicit prerequisites instead of
-  being downloaded silently by the release. / La configuración y el bridge
-  cliente MCP vienen incluidos y activos; `servers.json` permite activar o
-  desactivar Serena, LSP TypeScript y LSP Python, mientras los ejecutables
-  externos siguen siendo prerequisites explícitos.
+- **Embedded MCP configuration** — Serena and free-search are shipped as
+  managed integrations, materialized on first boot, enabled by default, and
+  independently toggleable under the user's `dsh-home`. `servers.json` and
+  the managed Cordis patch preserve unrelated user rows. Serena activates the
+  selected project explicitly; free-search does not open a browser to search.
+  The Windows uvx bootstrap reuses or silently provisions its pinned runtime. /
+  Serena y free-search vienen como integraciones administradas, activas por
+  defecto y alternables desde `dsh-home`; se preservan las filas ajenas,
+  Serena activa explícitamente el proyecto y free-search no abre navegador.
+  El bootstrap de uvx de Windows reutiliza o instala silenciosamente su
+  runtime fijado.
 
-- **Thinking model support** — Reasoning policy now recognizes non-DeepSeek
-  thinking-capable models (mimo-v2.5, qwen*think, gemini*thinking) with an
-  off/low/high vocabulary. / La política de razonamiento ahora reconoce modelos
-  con thinking de terceros.
+- **Thinking model support** — Reasoning policy recognizes non-DeepSeek
+  thinking-capable models. MiMo-V2.5 is a binary on/off thinking contract:
+  FreeCode sends `thinking.type` and never sends the unsupported
+  `reasoning_effort` field. / La política reconoce modelos con thinking.
+  MiMo-V2.5 conserva un contrato binario on/off: FreeCode envía
+  `thinking.type` y nunca envía el campo no soportado `reasoning_effort`.
 
 - **Upstream sync with modular overlays** — `vendor/deepseek-harness` remains a
   git subtree and FreeCode changes are replayable patches in
@@ -38,7 +42,7 @@
 - **Critical security fixes from code review (56 findings)**:
   - `before-quit`: re-entrancy guard + try/catch wrapper + all timers cleared
   - `process.env` whitelist: prevent leaking Electron/Node internals to child
-    processes in both Gemini and Harness supervisors
+    processes in the Harness supervisor and workers
   - IPC: Zod validation for `pool:restartWorker` and `torfleet:enable`
   - `model-refresher`: atomic write (tmp+rename) for settings.yaml
   - `pool.ts`: snapshot workerMap before async healthTick iteration
@@ -46,15 +50,16 @@
   - `lb.ts`: periodic sweep of stale sticky sessions
 
 - **Race condition fixes**:
-  - `HarnessSupervisor`: mutex on start/stop/restart prevents orphan processes
-  - `GeminiWeb2ApiSupervisor`: mutex on start/stop prevents race conditions
+  - `HarnessSupervisor`: generations, one pending spawn, stale-event rejection
+    and full-tree shutdown prevent duplicate processes
+  - worker pool: bounded respawn and stop/restart generation guards
   - `TorFleet onChange`: remove duplicate listener on toggle (memory leak fix)
 
 - **Failed-installer regression fixed** — The v0.5.0 candidate had lost the
   Electron dialog bridge from the Win32 `directory-picker-native` bundle.
-  Preflight, source markers, bundle hashes, installer layout smoke, and the
-  isolated upgrade smoke now reject a bridge-free or truncated runtime and
-  point users to the last known-good `v0.4.3`.
+  Preflight, source markers, bundle hashes and the clean installer layout smoke
+  now reject a bridge-free or truncated runtime and point users to the last
+  known-good `v0.4.3`; an upgrade from 0.4.3 is not a release gate.
 
 - **Updater hardening** — About reads `app.getVersion()`, update checks run at
   startup and every six hours, the update control is the same 34px circular
@@ -64,10 +69,12 @@
 
 ### Changed / Cambiado
 
-- **Gemini Web endpoint** is now explicitly documented as text-only queries.
-  The `defaultInput` field changed from `['text', 'image']` to `['text']`.
-  Image/vision inputs are unsupported by the web bridge.
-  / El endpoint Gemini Web ahora es explícitamente solo texto.
+- **Gemini2API removed** — The provider, supervisor, Python resources, selector
+  models, fallback and refresher are gone. Managed migration removes only the
+  exact Gemini route and preserves unrelated providers and sessions. /
+  **Gemini2API eliminado** — Se retiraron provider, supervisor, recursos
+  Python, modelos, fallback y refresher; la migración conserva providers y
+  sesiones ajenos.
 
 - **Contract strengthening**:
   - `ChatMessage` schema: cross-validate `toolCalls` (assistant role only) and
@@ -77,9 +84,10 @@
     opencode-adapter/types and shared-types
 
 - **Manual release validation** — The Windows NSIS installer, Windows portable
-  executable, and Linux AppImage are built locally after the full test,
-  contract, bundle, closure, fresh-install, and `v0.4.3` upgrade gates pass;
-  no GitHub Actions release workflow is used.
+  executable and Windows Harness runtime archive are built locally after the
+  full test, contract, bundle, closure, real-MCP and fresh-install gates pass;
+  no GitHub Actions release workflow is used. Linux/macOS are out of scope for
+  0.5.0.
 
 - **Cross-platform contract hardening** — Linux versioned shared libraries such
   as `libvips-cpp.so.8.18.3` are now recognized by the native-runtime contract,

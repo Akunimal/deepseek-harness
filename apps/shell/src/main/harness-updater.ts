@@ -127,7 +127,10 @@ export async function installHarnessRuntime(
     writeFileSync(archivePath, archive);
     const extracted = spawnSync('tar', ['-xzf', archivePath, '-C', extractRoot], {
       stdio: 'ignore',
-      windowsHide: process.platform === 'win32',
+      // The updater is invoked from Electron; extraction must never flash a
+      // transient console window while an update is downloading/installing.
+      windowsHide: true,
+      shell: false,
     });
     if (extracted.status !== 0) throw new Error(`Could not extract harness runtime (exit ${extracted.status ?? 'unknown'})`);
 

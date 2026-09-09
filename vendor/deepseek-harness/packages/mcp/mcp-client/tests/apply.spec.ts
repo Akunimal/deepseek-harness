@@ -126,6 +126,22 @@ describe('mcp-client plugin module exports', () => {
     expect(resolved.serverName).toBe('github-prod_1')
   })
 
+  it('Config schema preserves a bounded project activation contract', () => {
+    const resolved = ConfigSchema({
+      transport: 'stdio',
+      serverName: 'serena',
+      command: 'uvx',
+      projectActivation: { toolName: 'activate_project', pathArgument: 'project' },
+    } as never)
+    expect(resolved.projectActivation).toEqual({ toolName: 'activate_project', pathArgument: 'project' })
+    expect(() => ConfigSchema({
+      transport: 'stdio',
+      serverName: 'serena',
+      command: 'uvx',
+      projectActivation: { toolName: 'activate project', pathArgument: 'project' },
+    } as never)).toThrow()
+  })
+
   it('Config schema materializes reconnect defaults and merges partial overrides', () => {
     const omitted = ConfigSchema({
       transport: 'stdio',

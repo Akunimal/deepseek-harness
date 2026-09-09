@@ -80,6 +80,7 @@ export function ModelSelect(
     : choices.findIndex(c => c.selection.provider === state.current?.provider && c.selection.model === state.current.model)
   const currentChoice = choices[selectedIndex]
   const reasoning = currentChoice?.model.reasoning
+  const thinkingToggle = reasoning?.control === 'toggle'
   const effectiveEffort = state.current?.reasoningEffort ?? reasoning?.defaultEffort
   const effortLabel = reasoning === undefined
     ? undefined
@@ -204,7 +205,7 @@ export function ModelSelect(
       ? t('trigger.selectAria')
       : effortLabel === undefined
         ? t('trigger.aria', { model: modelLabel })
-        : t('trigger.ariaEffort', { model: modelLabel, effort: effortLabel })
+        : t(thinkingToggle ? 'trigger.ariaThinking' : 'trigger.ariaEffort', { model: modelLabel, effort: effortLabel })
   itemRefs.current = []
   let itemIndex = 0
   const itemRef = () => {
@@ -242,7 +243,7 @@ export function ModelSelect(
           id={`${id}-menu`}
           className={css.menu}
           role="menu"
-          aria-label={t('menu.aria')}
+          aria-label={t(thinkingToggle ? 'menu.ariaThinking' : 'menu.aria')}
           aria-busy={state.status === 'loading' || busy}
         >
           {pane === 'root' && (
@@ -254,7 +255,7 @@ export function ModelSelect(
               </button>
               {reasoning !== undefined && (
                 <button ref={itemRef()} type="button" role="menuitem" className={css.cell} onClick={() => { setPane('effort') }}>
-                  <span className={css.cellLabel}>{t('menu.effort')}</span>
+                  <span className={css.cellLabel}>{t(thinkingToggle ? 'menu.thinking' : 'menu.effort')}</span>
                   <span className={css.cellValue}>{effortLabel}</span>
                   <IconChevronRightOutline14 className={css.cellChevron} />
                 </button>

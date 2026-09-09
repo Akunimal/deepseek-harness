@@ -58,6 +58,7 @@ function pwshImpl(): SecretStore | null {
     encoding: 'utf8',
     timeout: 10_000,
     windowsHide: true,
+    shell: false,
   });
   if (probe.status !== 0) return null;
 
@@ -136,6 +137,7 @@ public static class FreecodeCred {
         encoding: 'utf8',
         timeout: 20_000,
         windowsHide: true,
+        shell: false,
       });
       if (r.status !== 0) throw new Error(`setSecret failed: ${r.stderr || r.stdout}`);
     },
@@ -146,6 +148,7 @@ public static class FreecodeCred {
         encoding: 'utf8',
         timeout: 20_000,
         windowsHide: true,
+        shell: false,
       });
       if (r.status !== 0) return null;
       const out = r.stdout.trim();
@@ -158,6 +161,7 @@ public static class FreecodeCred {
         encoding: 'utf8',
         timeout: 20_000,
         windowsHide: true,
+        shell: false,
       });
     },
   };

@@ -10,7 +10,8 @@ import { HarnessSupervisor, HarnessInstance } from './harness-supervisor.js';
 import { SecretStore, resolveSecrets } from './secret-store.js';
 import { join, resolve } from 'node:path';
 import { resolveOpencodeBinary } from './resource-paths.js';
-import { ensureEmbeddedMcpConfig } from './mcp-home.js';
+import { embeddedMcpEnvironment, ensureEmbeddedMcpConfig } from './mcp-home.js';
+import type { EmbeddedMcpState, McpRuntimeStatus } from '@freecode/shared-types';
 
 /**
  * Shell runtime — owns the full backend stack of the desktop app:
@@ -41,25 +42,108 @@ export interface ShellRuntimeConfig {
   extraEnv?: Record<string, string>;
   /** Authenticated loopback bridge for the visible persistent browser. */
   browserBridge?: { endpoint: string; token: string };
+  /** Absolute uvx executable selected by the platform bootstrap. */
+  uvxCommand?: string;
   /** Fired once when every ready worker is rate-limited (429) within the LB
    *  detection window. The shell uses it to auto-enable Tor Fleet exit
    *  rotation and warn the user about added latency. */
   onAllWorkersRateLimited?: () => void;
 }
 
+export type McpStatusListener = (status: McpRuntimeStatus) => void;
+
 export interface ShellRuntime {
   pool: Pool;
   lb: LoadBalancer;
   supervisor: HarnessSupervisor;
   workers: () => WorkerHandle[];
+  /** Current managed MCP config plus live connection evidence. */
+  mcpState(): EmbeddedMcpState;
+  /** Re-read the product-managed MCP file before showing settings. */
+  refreshMcpState(): EmbeddedMcpState;
+  /** Reset enabled servers to starting before a supervisor restart. */
+  resetMcpStatus(): void;
+  onMcpStatus(listener: McpStatusListener): () => void;
   start(): Promise<void>;
   stop(): Promise<void>;
 }
 
 export async function createShellRuntime(cfg: ShellRuntimeConfig): Promise<ShellRuntime> {
+  const ocrEnv: Record<string, string> = process.platform === 'win32'
+    ? {
+        FREECODE_TESSERACT_PATH: join(cfg.resourcesDir, 'tesseract', 'tesseract.exe'),
+        FREECODE_TESSDATA_PREFIX: join(cfg.resourcesDir, 'tesseract', 'tessdata'),
+      }
+    : {};
+  let mcpEnv: Record<string, string> = { FREECODE_WEB_MODE: '1', ...ocrEnv };
+  const mcpHome = join(cfg.userDataDir, 'dsh-home');
+  let mcpCatalog: EmbeddedMcpState = { configPath: join(mcpHome, 'mcp', 'servers.json'), servers: [] };
+  const mcpStatuses = new Map<string, McpRuntimeStatus>();
+  const mcpListeners = new Set<McpStatusListener>();
+  const setMcpCatalog = (state: EmbeddedMcpState): void => {
+    mcpCatalog = {
+      configPath: state.configPath,
+      servers: state.servers.map((server) => ({ ...server, args: [...server.args] })),
+    };
+    for (const server of mcpCatalog.servers) {
+      const existing = mcpStatuses.get(server.id);
+      if (!server.enabled) {
+        mcpStatuses.set(server.id, { serverId: server.id, state: 'disabled', toolCount: 0 });
+      } else if (existing === undefined || existing.state === 'disabled') {
+        mcpStatuses.set(server.id, { serverId: server.id, state: 'starting', toolCount: 0 });
+      }
+    }
+  };
+  const emitMcpStatus = (status: McpRuntimeStatus): void => {
+    if (!mcpCatalog.servers.some((server) => server.id === status.serverId)) return;
+    const normalized: McpRuntimeStatus = {
+      ...status,
+      error: status.error?.slice(0, 1_024),
+    };
+    mcpStatuses.set(status.serverId, normalized);
+    for (const listener of mcpListeners) listener(normalized);
+  };
+  const mcpState = (): EmbeddedMcpState => ({
+    configPath: mcpCatalog.configPath,
+    servers: mcpCatalog.servers.map((server) => ({
+      ...server,
+      args: [...server.args],
+      runtime: mcpStatuses.get(server.id) ?? {
+        serverId: server.id,
+        state: server.enabled ? 'starting' : 'disabled',
+        toolCount: 0,
+      },
+    })),
+  });
+  const resetMcpStatus = (): void => {
+    for (const server of mcpCatalog.servers) {
+      emitMcpStatus({
+        serverId: server.id,
+        state: server.enabled ? 'starting' : 'disabled',
+        toolCount: 0,
+      });
+    }
+  };
   try {
-    const mcp = ensureEmbeddedMcpConfig(join(cfg.userDataDir, 'dsh-home'));
-    cfg.log?.('info', 'embedded MCP catalog ready', { enabled: mcp.enabled, configPath: mcp.configPath });
+    const mcp = ensureEmbeddedMcpConfig(mcpHome, { uvxCommand: cfg.uvxCommand });
+    setMcpCatalog({
+      configPath: mcp.configPath,
+      servers: mcp.servers.map((server) => ({ ...server, args: [...server.args] })),
+    });
+    mcpEnv = {
+      ...embeddedMcpEnvironment(mcp),
+      FREECODE_UVX_COMMAND: cfg.uvxCommand ?? 'uvx',
+      // dsh's Cordis logger is intentionally not attached to stdout/stderr in
+      // the web profile. The patched MCP bridge emits this bounded status
+      // protocol only when the desktop shell opts in, so tray state reflects
+      // real initialize -> tools/list -> registration evidence.
+      FREECODE_MCP_STATUS_STREAM: 'stderr',
+      ...ocrEnv,
+    };
+    // This is only the persisted catalog becoming available. The actual MCP
+    // readiness contract is initialize -> tools/list -> schema validation and
+    // is logged by the child connection supervisor after it registers tools.
+    cfg.log?.('info', 'embedded MCP catalog configured', { enabled: mcp.enabled, configPath: mcp.configPath });
   } catch (error) {
     // MCP is optional; a config filesystem failure must not prevent the core
     // desktop runtime from starting. The warning remains in the app log.
@@ -99,9 +183,13 @@ export async function createShellRuntime(cfg: ShellRuntimeConfig): Promise<Shell
     cliEntry,
     homeDir: join(cfg.userDataDir, 'dsh-home'),
     lbUrl: lb.url(),
-    extraEnv: { ...cfg.extraEnv, ...extraEnv },
+    // Product-managed MCP values are authoritative for the child process:
+    // they are derived from the persisted catalog, not inherited from the
+    // Electron environment. A new harness process reads the current toggles.
+    extraEnv: { ...cfg.extraEnv, ...mcpEnv, ...extraEnv },
     browserBridge: cfg.browserBridge,
     nodeEnv: cfg.nodeEnv,
+    onMcpStatus: emitMcpStatus,
   });
 
   return {
@@ -109,7 +197,28 @@ export async function createShellRuntime(cfg: ShellRuntimeConfig): Promise<Shell
     lb,
     supervisor,
     workers: () => pool.workers(),
+    mcpState,
+    refreshMcpState: () => {
+      const state = ensureEmbeddedMcpConfig(mcpHome, { uvxCommand: cfg.uvxCommand });
+      setMcpCatalog({
+        configPath: state.configPath,
+        servers: state.servers.map((server) => ({ ...server, args: [...server.args] })),
+      });
+      mcpEnv = {
+        ...embeddedMcpEnvironment(state),
+        FREECODE_UVX_COMMAND: cfg.uvxCommand ?? 'uvx',
+        ...ocrEnv,
+      };
+      supervisor.updateExtraEnv({ ...cfg.extraEnv, ...mcpEnv, ...extraEnv });
+      return mcpState();
+    },
+    resetMcpStatus,
+    onMcpStatus: (listener) => {
+      mcpListeners.add(listener);
+      return () => mcpListeners.delete(listener);
+    },
     start: async () => {
+      resetMcpStatus();
       await pool.start();
       await supervisor.start();
     },

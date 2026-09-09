@@ -1,0 +1,14 @@
+diff --git a/vendor/deepseek-harness/packages/mcp/mcp-client/src/connection.ts b/vendor/deepseek-harness/packages/mcp/mcp-client/src/connection.ts
+--- a/vendor/deepseek-harness/packages/mcp/mcp-client/src/connection.ts
++++ b/vendor/deepseek-harness/packages/mcp/mcp-client/src/connection.ts
+@@ -216,8 +240,10 @@
+       })
+       ctx.logger.error(`${label}: giving up after ${policy.maxAttempts} consecutive failed reconnect attempts — tools unregistered; reload the plugin or restart the Host to reconnect`)
++      publishHostStatus('failed', 0, `giving up after ${policy.maxAttempts} consecutive failed reconnect attempts`)
+       return
+     }
+     const delayMs = Math.min(policy.maxDelayMs, policy.initialDelayMs * 2 ** (failedAttempts - 1))
+     const action = lostEstablishedConnection ? 'connection lost; reconnecting' : 'connection failed; retrying'
+     ctx.logger.warn(`${label}: ${action} in ${delayMs}ms (attempt ${failedAttempts}/${policy.maxAttempts})`)
++    publishHostStatus('degraded', 0, action)
+     reconnectTimer = setTimeout(() => {

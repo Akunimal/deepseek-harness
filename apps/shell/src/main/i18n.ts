@@ -36,6 +36,7 @@ const strings = {
   // Tray
   'tray.show': { es: 'Mostrar', en: 'Show' },
   'tray.tooltip': { es: 'FreeCode DeepSeek Harness', en: 'FreeCode DeepSeek Harness' },
+  'tray.mcpStatus': { es: 'MCP: $1/$2 listos', en: 'MCP: $1/$2 ready' },
   'tray.updateDownloading': { es: 'Descargando actualización…', en: 'Downloading update…' },
   'tray.updateInstalling': { es: 'Instalando actualización…', en: 'Installing update…' },
 
@@ -50,6 +51,12 @@ const strings = {
 
   // Notifications
   'notify.ready.title': { es: 'Harness listo', en: 'Harness ready' },
+  'notify.ready.body': { es: 'FreeCode está listo para usar.', en: 'FreeCode is ready to use.' },
+  'mcp.failed.title': { es: 'MCP no pudo conectar', en: 'MCP connection failed' },
+  'mcp.failed.message': {
+    es: 'La integración MCP $1 no pudo registrar sus herramientas. Revisá la tab MCP y el log de la aplicación.',
+    en: 'The $1 MCP integration could not register its tools. Check the MCP tab and the application log.',
+  },
   'status.catalog.down.title': { es: 'Catálogo de modelos no disponible', en: 'Model catalog unavailable' },
   'status.catalog.down.message': {
     es: 'No se pudo consultar el catálogo. Se conserva la última selección válida y se reintentará automáticamente.',
@@ -243,11 +250,15 @@ const zhStrings = {
   'update.indicator': '发现更新',
   'tray.show': '显示',
   'tray.tooltip': 'FreeCode DeepSeek Harness',
+  'tray.mcpStatus': 'MCP：$1/$2 个就绪',
   'tray.updateDownloading': '正在下载更新…',
   'tray.updateInstalling': '正在安装更新…',
   'update.downloading.title': 'FreeCode 正在下载更新',
   'update.downloading.body': '下载正在进行中。托盘菜单也会显示当前状态。',
   'notify.ready.title': 'Harness 已就绪',
+  'notify.ready.body': 'FreeCode 已准备就绪。',
+  'mcp.failed.title': 'MCP 连接失败',
+  'mcp.failed.message': 'MCP 集成 $1 未能注册工具。请检查 MCP 标签页和应用日志。',
   'status.catalog.down.title': '模型目录不可用',
   'status.catalog.down.message': '无法访问模型目录。已保留上一次有效选择，并会自动重试。',
   'status.catalog.degraded.title': '模型目录服务降级',

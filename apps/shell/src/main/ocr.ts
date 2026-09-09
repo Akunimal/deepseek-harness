@@ -1,14 +1,8 @@
 /**
- * OCR module — wraps the system Tesseract CLI for text extraction from images.
- *
- * Requirements: `tesseract` must be in PATH (installed via
- *   `winget install UB-Mannheim.TesseractOCR` on Windows,
- *   `brew install tesseract` on macOS, or
- *   `apt install tesseract-ocr` on Linux).
- *
- * The module exposes a single `extractText()` function used by the IPC bridge.
- * It does NOT bundle Tesseract binaries to avoid the 50+ MB weight penalty;
- * if Tesseract is missing the function returns a clear error.
+ * OCR module — wraps the bundled Tesseract CLI for the renderer-facing
+ * diagnostic bridge. The upstream model path uses the same executable via
+ * FREECODE_TESSERACT_PATH. A PATH-installed binary remains a development
+ * fallback, but a release package must carry its own payload.
  */
 
 import { spawn } from 'node:child_process';
@@ -17,6 +11,15 @@ import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { writeFile, readFile, unlink } from 'node:fs/promises';
 import { randomBytes } from 'node:crypto';
+
+const MAX_INPUT_BYTES = 25 * 1024 * 1024;
+const MAX_OUTPUT_BYTES = 256 * 1024;
+const MAX_STDERR_BYTES = 8 * 1024;
+const DEFAULT_TIMEOUT_MS = 30_000;
+const MIN_TIMEOUT_MS = 100;
+const MAX_TIMEOUT_MS = 30_000;
+const LANG_RE = /^[a-z]{3}(?:\+[a-z]{3})*$/u;
+const MAX_PSM = 13;
 
 export interface OcrResult {
   text: string;
@@ -43,6 +46,8 @@ function resolveTesseractBinary(): string | null {
   // Check common install locations
   const candidates = process.platform === 'win32'
     ? [
+        process.env['FREECODE_TESSERACT_PATH'] ?? '',
+        join(process.resourcesPath ?? '', 'freecode', 'tesseract', 'tesseract.exe'),
         join(process.env['LOCALAPPDATA'] ?? '', 'Programs', 'Tesseract-OCR', 'tesseract.exe'),
         join(process.env['PROGRAMFILES'] ?? '', 'Tesseract-OCR', 'tesseract.exe'),
         join(process.env['PROGRAMFILES(X86)'] ?? '', 'Tesseract-OCR', 'tesseract.exe'),
@@ -87,10 +92,20 @@ export async function extractText(
 
   const lang = options.lang ?? 'eng';
   const psm = options.psm ?? 3;
-  const timeoutMs = options.timeoutMs ?? 30_000;
+  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  if (!LANG_RE.test(lang)) throw new Error('Invalid OCR language; use three-letter Tesseract codes separated by +');
+  if (!Number.isInteger(psm) || psm < 0 || psm > MAX_PSM) throw new Error('Invalid OCR page segmentation mode');
+  if (!Number.isInteger(timeoutMs) || timeoutMs < MIN_TIMEOUT_MS || timeoutMs > MAX_TIMEOUT_MS) {
+    throw new Error(`Invalid OCR timeout; expected ${MIN_TIMEOUT_MS}-${MAX_TIMEOUT_MS}ms`);
+  }
 
   // Write input to a temp file if it's a Buffer
   const isBuffer = Buffer.isBuffer(input);
+  if (isBuffer && input.byteLength === 0) throw new Error('OCR input is empty');
+  if (isBuffer && input.byteLength > MAX_INPUT_BYTES) throw new Error('OCR input exceeds the 25MB limit');
+  if (!isBuffer && (!input || !input.startsWith('/') && !/^[A-Za-z]:[\\/]/u.test(input))) {
+    throw new Error('OCR file path must be absolute');
+  }
   const tmpFile = isBuffer
     ? join(tmpdir(), `ocr-${randomBytes(8).toString('hex')}.png`)
     : input;
@@ -110,22 +125,45 @@ export async function extractText(
       ], {
         stdio: ['ignore', 'pipe', 'pipe'],
         windowsHide: true,
+        shell: false,
       });
 
+      let stdoutBytes = 0;
+      let stderrBytes = 0;
       let stdout = '';
       let stderr = '';
-      proc.stdout?.on('data', (chunk: Buffer) => { stdout += chunk.toString(); });
-      proc.stderr?.on('data', (chunk: Buffer) => { stderr += chunk.toString(); });
+      let settled = false;
+      const fail = (error: Error): void => {
+        if (settled) return;
+        settled = true;
+        proc.kill('SIGKILL');
+        reject(error);
+      };
+      proc.stdout?.on('data', (chunk: Buffer) => {
+        stdoutBytes += chunk.byteLength;
+        if (stdoutBytes > MAX_OUTPUT_BYTES) {
+          fail(new Error('Tesseract OCR output exceeds the 256KB limit'));
+          return;
+        }
+        stdout += chunk.toString();
+      });
+      proc.stderr?.on('data', (chunk: Buffer) => {
+        stderrBytes += chunk.byteLength;
+        if (stderrBytes <= MAX_STDERR_BYTES) stderr += chunk.toString();
+      });
 
       const timer = setTimeout(() => {
-        proc.kill('SIGKILL');
-        reject(new Error(`Tesseract OCR timed out after ${timeoutMs}ms`));
+        fail(new Error(`Tesseract OCR timed out after ${timeoutMs}ms`));
       }, timeoutMs);
 
       proc.on('close', (code) => {
         clearTimeout(timer);
+        if (settled) return;
+        settled = true;
         if (code === 0) {
-          resolve(stdout.trim());
+          const result = stdout.trim();
+          if (!result) reject(new Error('Tesseract OCR returned no text'));
+          else resolve(result);
         } else {
           reject(new Error(`Tesseract exited with code ${code}: ${stderr.trim()}`));
         }
@@ -133,6 +171,8 @@ export async function extractText(
 
       proc.on('error', (err) => {
         clearTimeout(timer);
+        if (settled) return;
+        settled = true;
         reject(err);
       });
     });

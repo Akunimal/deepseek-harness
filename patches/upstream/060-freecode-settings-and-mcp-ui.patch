@@ -1,0 +1,466 @@
+diff --git a/vendor/deepseek-harness/packages/client/ui-settings-plugins/src/client/PluginsSettingsSection.module.css b/vendor/deepseek-harness/packages/client/ui-settings-plugins/src/client/PluginsSettingsSection.module.css
+index 0bd1beb9bf..16c574ad6b 100644
+--- a/vendor/deepseek-harness/packages/client/ui-settings-plugins/src/client/PluginsSettingsSection.module.css
++++ b/vendor/deepseek-harness/packages/client/ui-settings-plugins/src/client/PluginsSettingsSection.module.css
+@@ -83,3 +83,107 @@
+   font-size: 13px;
+   color: var(--dsw-alias-label-tertiary);
+ }
++
++.mcpPanel {
++  display: flex;
++  flex-direction: column;
++  gap: 12px;
++}
++
++.mcpHeading,
++.mcpDescription,
++.mcpMeta,
++.mcpPath {
++  margin: 0;
++}
++
++.mcpHeading {
++  font-size: 16px;
++  font-weight: 600;
++}
++
++.mcpDescription,
++.mcpMeta span,
++.mcpPath {
++  color: var(--dsw-alias-label-tertiary);
++  font-size: 12px;
++}
++
++.mcpRows {
++  display: flex;
++  flex-direction: column;
++  gap: 8px;
++  list-style: none;
++  margin: 0;
++  padding: 0;
++}
++
++.mcpRow {
++  align-items: center;
++  border: 0.5px solid var(--dsw-alias-border-l2);
++  border-radius: 8px;
++  display: flex;
++  gap: 12px;
++  justify-content: space-between;
++  padding: 10px 12px;
++}
++
++.mcpMeta {
++  display: flex;
++  flex-direction: column;
++  gap: 3px;
++  min-width: 0;
++}
++
++.mcpMeta code {
++  color: var(--dsw-alias-label-tertiary);
++  font-size: 11px;
++  max-width: 520px;
++  overflow: hidden;
++  text-overflow: ellipsis;
++  white-space: nowrap;
++}
++
++.mcpMeta small {
++  color: var(--dsw-alias-label-danger, #f27676);
++  font-size: 11px;
++  max-width: 520px;
++  overflow: hidden;
++  text-overflow: ellipsis;
++  white-space: nowrap;
++}
++
++.mcpToggle,
++.mcpActions button,
++.mcpError button {
++  background: var(--dsw-alias-fill-l2);
++  border: 0;
++  border-radius: 6px;
++  color: var(--dsw-alias-label-primary);
++  cursor: pointer;
++  font: inherit;
++  font-size: 12px;
++  padding: 7px 10px;
++}
++
++.mcpToggle[aria-pressed='true'] {
++  background: var(--dsw-alias-state-business-primary);
++  color: white;
++}
++
++.mcpToggle:disabled {
++  cursor: wait;
++  opacity: 0.6;
++}
++
++.mcpActions {
++  display: flex;
++  gap: 8px;
++}
++
++.mcpError {
++  align-items: flex-start;
++  display: flex;
++  flex-direction: column;
++  gap: 8px;
++}
+diff --git a/vendor/deepseek-harness/packages/client/ui-settings-plugins/src/client/index.ts b/vendor/deepseek-harness/packages/client/ui-settings-plugins/src/client/index.ts
+index 46529882bc..6129f7481c 100644
+--- a/vendor/deepseek-harness/packages/client/ui-settings-plugins/src/client/index.ts
++++ b/vendor/deepseek-harness/packages/client/ui-settings-plugins/src/client/index.ts
+@@ -27,6 +27,7 @@ import { PluginsSettingsSection } from './PluginsSettingsSection.tsx'
+ import type { PluginsSettingsSectionInjected, PluginsSettingsTabEntry } from './PluginsSettingsSection.tsx'
+ import { SubagentModelSelectionCard } from './SubagentModelSelectionCard.tsx'
+ import { WebSearchCard } from './WebSearchCard.tsx'
++import { McpSettingsTab } from './McpSettingsTab.tsx'
+ import { AGENT_LOOP_NS, AgentLoopCardController } from './agent-loop-card-controller.ts'
+ import { SHELL_NS, BashCardController } from './bash-card-controller.ts'
+ import { ConfigurablePluginsTabController } from './tab-store.ts'
+@@ -164,6 +165,14 @@ export function apply(ctx: ClientContext): void {
+     children: { 'settings.plugin.item': { kind: 'keyed', scope: 'root' } },
+   }, ConfigurablePluginsTab))
+ 
++  ctx.slots.inject('settings.plugins.tab', () => ctx.slots.register({
++    name: 'settings.plugins.tab',
++    id: 'mcp',
++    order: 5,
++    label: () => t('mcpTab'),
++    locale: NS,
++  }, McpSettingsTab))
++
+   ctx.slots.inject('settings.plugin.item', function* () {
+     yield ctx.slots.register({
+       name: 'settings.plugin.item',
+diff --git a/vendor/deepseek-harness/packages/client/ui-settings-plugins/src/client/locales.ts b/vendor/deepseek-harness/packages/client/ui-settings-plugins/src/client/locales.ts
+index c70b51b39d..4a0a3b5295 100644
+--- a/vendor/deepseek-harness/packages/client/ui-settings-plugins/src/client/locales.ts
++++ b/vendor/deepseek-harness/packages/client/ui-settings-plugins/src/client/locales.ts
+@@ -18,6 +18,10 @@ export type PluginsSettingsLocaleKey =
+   | 'subagentModelSelectionPartial' | 'subagentModelSelectionUnavailable'
+   | 'subagentModelSelectionUnavailableGroup' | 'subagentModelSelectionEmpty'
+   | 'subagentModelSelectionRequired' | 'subagentModelSelectionConflict' | 'subagentModelSelectionOff'
++  | 'mcpTab' | 'mcpTitle' | 'mcpDescription' | 'mcpLoading' | 'mcpUnavailable'
++  | 'mcpRetry' | 'mcpEnabled' | 'mcpDisabled' | 'mcpEnable' | 'mcpDisable'
++  | 'mcpOpenConfig' | 'mcpRefresh' | 'mcpStatusStarting' | 'mcpStatusReady'
++  | 'mcpStatusDegraded' | 'mcpStatusFailed' | 'mcpStatusDisabled' | 'mcpTools'
+ 
+ /** English copy. */
+ export const en: Record<PluginsSettingsLocaleKey, string> = {
+@@ -77,6 +81,24 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
+   subagentModelSelectionRequired: 'Select at least one model before saving.',
+   subagentModelSelectionConflict: 'Settings changed elsewhere. Discard your draft and try again.',
+   subagentModelSelectionOff: 'Subagents use configured defaults or inherit the parent agent\'s model. Saved model choices are retained.',
++  mcpTab: 'MCP',
++  mcpTitle: 'Embedded MCP servers',
++  mcpDescription: 'Serena and free web search are bundled as managed integrations. Toggle them without editing the generated patch.',
++  mcpLoading: 'Loading MCP configuration…',
++  mcpUnavailable: 'MCP configuration is unavailable in this host.',
++  mcpRetry: 'Retry',
++  mcpEnabled: 'Enabled',
++  mcpDisabled: 'Disabled',
++  mcpEnable: 'Enable',
++  mcpDisable: 'Disable',
++  mcpOpenConfig: 'Open MCP configuration',
++  mcpRefresh: 'Refresh',
++  mcpStatusStarting: 'Starting',
++  mcpStatusReady: 'Ready',
++  mcpStatusDegraded: 'Retrying',
++  mcpStatusFailed: 'Failed',
++  mcpStatusDisabled: 'Disabled',
++  mcpTools: 'tools registered',
+ }
+ 
+ /** Simplified Chinese copy. */
+@@ -137,4 +159,22 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
+   subagentModelSelectionRequired: '保存前请至少选择一个模型。',
+   subagentModelSelectionConflict: '设置已在其他位置更新。请放弃修改后重试。',
+   subagentModelSelectionOff: '关闭后，Subagent 使用配置的默认模型或继承父 Agent 的模型；已选模型会保留。',
++  mcpTab: 'MCP',
++  mcpTitle: '内置 MCP 服务器',
++  mcpDescription: 'Serena 和免费网页搜索作为受管理集成随产品提供。无需编辑生成的补丁即可切换。',
++  mcpLoading: '正在加载 MCP 配置…',
++  mcpUnavailable: '当前宿主无法访问 MCP 配置。',
++  mcpRetry: '重试',
++  mcpEnabled: '已启用',
++  mcpDisabled: '已停用',
++  mcpEnable: '启用',
++  mcpDisable: '停用',
++  mcpOpenConfig: '打开 MCP 配置',
++  mcpRefresh: '刷新',
++  mcpStatusStarting: '启动中',
++  mcpStatusReady: '就绪',
++  mcpStatusDegraded: '重试中',
++  mcpStatusFailed: '失败',
++  mcpStatusDisabled: '已停用',
++  mcpTools: '个工具已注册',
+ }
+diff --git a/vendor/deepseek-harness/packages/client/ui-settings-plugins/tests/apply.client.spec.ts b/vendor/deepseek-harness/packages/client/ui-settings-plugins/tests/apply.client.spec.ts
+index 3094d17672..3a4f0874ca 100644
+--- a/vendor/deepseek-harness/packages/client/ui-settings-plugins/tests/apply.client.spec.ts
++++ b/vendor/deepseek-harness/packages/client/ui-settings-plugins/tests/apply.client.spec.ts
+@@ -103,6 +103,7 @@ describe('ui-settings-plugins apply', () => {
+     const initialTabs = sectionFace.hooks.tabs.getSnapshot()
+     expect(initialTabs).toEqual([
+       { id: 'configurable', order: 0, label: '插件配置' },
++      { id: 'mcp', order: 5, label: 'MCP' },
+     ])
+     expect(sectionFace.hooks.tabs.getSnapshot()).toBe(initialTabs)
+ 
+@@ -112,6 +113,7 @@ describe('ui-settings-plugins apply', () => {
+     expect(sectionFace.hooks.tabs.getSnapshot()).toEqual([
+       { id: 'configurable', order: 0, label: '插件配置' },
+       { id: 'plain', order: 0, label: '' },
++      { id: 'mcp', order: 5, label: 'MCP' },
+     ])
+     unsubscribe()
+ 
+diff --git a/vendor/deepseek-harness/packages/util/native-command/src/path-opener.ts b/vendor/deepseek-harness/packages/util/native-command/src/path-opener.ts
+index 97d2084e61..2c322f61bb 100644
+--- a/vendor/deepseek-harness/packages/util/native-command/src/path-opener.ts
++++ b/vendor/deepseek-harness/packages/util/native-command/src/path-opener.ts
+@@ -22,7 +22,8 @@ export interface PathOpenerInternals {
+   /** Kernel release override used to distinguish WSL from desktop Linux. */
+   osRelease?: string
+   /** Environment used for WSL markers and the desktop Linux browser convention. */
+-  env?: NodeJS.ProcessEnv
++  /** Environment used for WSL markers, desktop conventions, and the optional Electron bridge. */
++  env?: NodeJS.ProcessEnv & Partial<Record<'FREECODE_FILE_OPEN_ENDPOINT' | 'FREECODE_DIALOG_BRIDGE_TOKEN', string>>
+   run?: PathOpenerRunner
+ }
+ 
+@@ -107,6 +108,24 @@ async function openWindowsPath(path: string, signal: AbortSignal, run: PathOpene
+   ], signal)
+ }
+ 
++/** Open settings through the authenticated Electron shell bridge when present. */
++async function openViaElectronBridge(
++  endpoint: string, token: string, path: string, signal: AbortSignal,
++): Promise<void> {
++  const response = await fetch(endpoint, {
++    method: 'POST',
++    headers: { 'x-freecode-dialog-token': token, 'content-type': 'application/json' },
++    body: JSON.stringify({ path }),
++    signal,
++  })
++  if (!response.ok) {
++    const text = await response.text().catch(() => '')
++    throw new Error(`file open bridge returned ${response.status}: ${text}`)
++  }
++  const data = await response.json() as { error?: string }
++  if (data.error) throw new Error(`file open bridge: ${data.error}`)
++}
++
+ /** Translate a WSL path before handing it to the Windows desktop. */
+ async function openWslPath(path: string, signal: AbortSignal, run: PathOpenerRunner): Promise<void> {
+   const translated = await run('wslpath', ['-w', path], signal)
+@@ -128,6 +147,15 @@ async function openNativePathWithIntent(
+   const env = internals.env ?? process.env
+   const wsl = platform === 'linux' && isWsl(internals)
+ 
++  if (platform === 'win32' && intent === 'text-editor') {
++    const endpoint = env.FREECODE_FILE_OPEN_ENDPOINT
++    const token = env.FREECODE_DIALOG_BRIDGE_TOKEN
++    if (endpoint && token) {
++      await openViaElectronBridge(endpoint, token, path, signal)
++      return
++    }
++  }
++
+   if (!wsl && intent === 'default' && BROWSER_DOCUMENTS.has(extname(path).toLowerCase())
+     && await openInBrowser(path, signal, platform, run, env)) return
+ 
+diff --git a/vendor/deepseek-harness/packages/util/native-command/tests/path-opener.spec.ts b/vendor/deepseek-harness/packages/util/native-command/tests/path-opener.spec.ts
+index d5cd1bb751..43195baf7e 100644
+--- a/vendor/deepseek-harness/packages/util/native-command/tests/path-opener.spec.ts
++++ b/vendor/deepseek-harness/packages/util/native-command/tests/path-opener.spec.ts
+@@ -108,6 +108,27 @@ describe('native path opener', () => {
+     )
+   })
+ 
++  it('uses the authenticated Electron bridge for Windows settings documents', async () => {
++    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => ({}) }))
++    vi.stubGlobal('fetch', fetchMock)
++    const run = vi.fn<PathOpenerRunner>()
++    await openNativeTextFile('C:\\work\\settings.yaml', signal(), {
++      platform: 'win32',
++      run,
++      env: {
++        FREECODE_FILE_OPEN_ENDPOINT: 'http://127.0.0.1:9000/open-text-file',
++        FREECODE_DIALOG_BRIDGE_TOKEN: 'token',
++      },
++    })
++    expect(fetchMock).toHaveBeenCalledWith('http://127.0.0.1:9000/open-text-file', expect.objectContaining({
++      method: 'POST',
++      headers: expect.objectContaining({ 'x-freecode-dialog-token': 'token' }),
++      body: JSON.stringify({ path: 'C:\\work\\settings.yaml' }),
++    }))
++    expect(run).not.toHaveBeenCalled()
++    vi.unstubAllGlobals()
++  })
++
+   it('opens with Linux xdg-open', async () => {
+     const run = vi.fn<PathOpenerRunner>(async () => ({ stdout: '', stderr: '' }))
+     await openNativePath('/tmp/a.txt', signal(), {
+diff --git a/vendor/deepseek-harness/packages/client/ui-settings-plugins/src/client/McpSettingsTab.tsx b/vendor/deepseek-harness/packages/client/ui-settings-plugins/src/client/McpSettingsTab.tsx
+new file mode 100644
+index 0000000000..845bfc9f65
+--- /dev/null
++++ b/vendor/deepseek-harness/packages/client/ui-settings-plugins/src/client/McpSettingsTab.tsx
+@@ -0,0 +1,151 @@
++/** FreeCode product-managed MCP catalog settings. */
++
++import { useEffect, useState } from 'react'
++import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
++import css from './PluginsSettingsSection.module.css'
++
++type McpRuntimeState = 'disabled' | 'starting' | 'ready' | 'degraded' | 'failed'
++
++interface McpServer {
++  id: string
++  serverName: string
++  transport: 'stdio' | 'streamable-http'
++  command: string
++  args: string[]
++  cwd: string
++  enabled: boolean
++  runtime?: {
++    serverId: string
++    state: McpRuntimeState
++    toolCount: number
++    error?: string
++  }
++}
++
++interface McpState {
++  configPath: string
++  servers: McpServer[]
++}
++
++interface FreeCodeBridge {
++  mcp: {
++    getState(): Promise<McpState>
++    setEnabled(id: string, enabled: boolean): Promise<McpState>
++    openConfig(): Promise<void>
++    onStatus(cb: (status: NonNullable<McpServer['runtime']>) => void): () => void
++  }
++}
++
++function freeCodeBridge(): FreeCodeBridge | undefined {
++  return (globalThis as typeof globalThis & { freecode?: FreeCodeBridge }).freecode
++}
++
++function serverLabel(id: string): string {
++  if (id === 'serena') return 'Serena'
++  if (id === 'free-search') return 'Free web search'
++  return id
++}
++
++export type McpSettingsTabProps = PropsRuntime<'settings.plugins.tab'> & PropsLocale<'settings.plugins'>
++
++function runtimeLabel(t: McpSettingsTabProps['t'], state: McpRuntimeState): string {
++  switch (state) {
++    case 'ready': return t('mcpStatusReady')
++    case 'degraded': return t('mcpStatusDegraded')
++    case 'failed': return t('mcpStatusFailed')
++    case 'disabled': return t('mcpStatusDisabled')
++    default: return t('mcpStatusStarting')
++  }
++}
++
++export function McpSettingsTab({ t }: McpSettingsTabProps) {
++  const [state, setState] = useState<McpState>()
++  const [loading, setLoading] = useState(true)
++  const [busy, setBusy] = useState<string>()
++  const [error, setError] = useState(false)
++
++  const load = () => {
++    const mcp = freeCodeBridge()?.mcp
++    if (mcp === undefined) {
++      setLoading(false)
++      setError(true)
++      return
++    }
++    setLoading(true)
++    void mcp.getState().then((next) => {
++      setState(next)
++      setError(false)
++    }).catch(() => setError(true)).finally(() => setLoading(false))
++  }
++
++  useEffect(load, [])
++
++  useEffect(() => {
++    const mcp = freeCodeBridge()?.mcp
++    if (mcp === undefined) return undefined
++    return mcp.onStatus((status) => {
++      setState((current) => current === undefined ? current : {
++        ...current,
++        servers: current.servers.map((server) => server.id === status.serverId
++          ? { ...server, runtime: status }
++          : server),
++      })
++    })
++  }, [])
++
++  const toggle = (server: McpServer) => {
++    const mcp = freeCodeBridge()?.mcp
++    if (mcp === undefined) return
++    setBusy(server.id)
++    void mcp.setEnabled(server.id, !server.enabled).then(setState).catch(() => setError(true)).finally(() => setBusy(undefined))
++  }
++
++  return (
++    <div className={css.mcpPanel}>
++      <div>
++        <h3 className={css.mcpHeading}>{t('mcpTitle')}</h3>
++        <p className={css.mcpDescription}>{t('mcpDescription')}</p>
++      </div>
++      {loading ? <p className={css.empty}>{t('mcpLoading')}</p> : error ? (
++        <div className={css.mcpError}>
++          <p>{t('mcpUnavailable')}</p>
++          <button type="button" onClick={load}>{t('mcpRetry')}</button>
++        </div>
++      ) : (
++        <>
++          <ul className={css.mcpRows}>
++            {(state?.servers ?? []).map((server) => (
++              <li className={css.mcpRow} key={server.id}>
++                <div className={css.mcpMeta}>
++                  <strong>{serverLabel(server.id)}</strong>
++                  <span>{server.enabled ? t('mcpEnabled') : t('mcpDisabled')}</span>
++                  {server.runtime !== undefined ? (
++                    <span>
++                      {runtimeLabel(t, server.runtime.state)} · {server.runtime.toolCount} {t('mcpTools')}
++                    </span>
++                  ) : null}
++                  {server.runtime?.error !== undefined ? <small>{server.runtime.error}</small> : null}
++                  <code>{server.command} {server.args.join(' ')}</code>
++                </div>
++                <button
++                  type="button"
++                  className={css.mcpToggle}
++                  aria-pressed={server.enabled}
++                  disabled={busy !== undefined}
++                  onClick={() => toggle(server)}
++                >
++                  {server.enabled ? t('mcpDisable') : t('mcpEnable')}
++                </button>
++              </li>
++            ))}
++          </ul>
++          <div className={css.mcpActions}>
++            <button type="button" onClick={() => void freeCodeBridge()?.mcp.openConfig()}>{t('mcpOpenConfig')}</button>
++            <button type="button" onClick={load}>{t('mcpRefresh')}</button>
++          </div>
++          {state?.configPath !== undefined ? <code className={css.mcpPath}>{state.configPath}</code> : null}
++        </>
++      )}
++    </div>
++  )
++}

@@ -12,12 +12,17 @@ import { refreshModels } from './model-refresher.js';
 import { isOcrAvailable, extractText } from './ocr.js';
 import { z } from 'zod';
 import type { TorFleet } from './torfleet.js';
-import { GEMINI_WEB_FALLBACK_MODELS, GEMINI_WEB_PROVIDER } from './gemini-web2api-supervisor.js';
+import { ensureEmbeddedMcpConfig, setEmbeddedMcpEnabled } from './mcp-home.js';
 
 const PoolResizePayloadSchema = z.object({ size: z.number().int().min(1).max(16) });
 const LocaleSetPayloadSchema = z.object({ locale: z.enum(['zh', 'en', 'es']) });
 const PoolRestartWorkerPayloadSchema = z.object({ id: z.string().min(1).max(128) });
 const TorfleetEnablePayloadSchema = z.object({ enabled: z.boolean() });
+const McpSetEnabledPayloadSchema = z.object({ id: z.string().min(1).max(64), enabled: z.boolean() });
+const OcrPayloadSchema = z.object({
+  imageBase64: z.string().min(1).max(36_000_000),
+  lang: z.string().regex(/^[a-z]{3}(?:\+[a-z]{3})*$/u).optional(),
+});
 
 /**
  * IPC contract — zod-validated channel handlers exposed to the renderer
@@ -29,7 +34,6 @@ export interface IpcDeps {
   userDataDir: string;
   homeDir: string;
   lbBaseUrl: string;
-  geminiBaseUrl?: string;
   catalogStore: { get(): unknown };
   torfleet: {
     instance: TorFleet | null;
@@ -79,14 +83,6 @@ export function registerIpc(deps: IpcDeps): () => void {
         homeDir,
         userDataDir,
         authHeader: 'Bearer public',
-        providers: [
-          ...(deps.geminiBaseUrl ? [{
-            provider: GEMINI_WEB_PROVIDER,
-            baseUrl: deps.geminiBaseUrl,
-            probeModels: false,
-            fallbackModels: GEMINI_WEB_FALLBACK_MODELS,
-          }] : []),
-        ],
       });
       const parsed = ModelCatalogSchema.parse(catalog);
       for (const wc of rendererTargets()) wc.send(IpcChannels.modelsCatalog, parsed);
@@ -121,6 +117,35 @@ export function registerIpc(deps: IpcDeps): () => void {
   // settings:openFolder (invoke) — reveal DSH_HOME in the OS file manager
   ipcMain.handle(IpcChannels.settingsOpenFolder, () => shell.openPath(homeDir));
 
+  // mcp:* — product-managed catalog controls. The renderer receives only a
+  // projection; paths and patch writes stay in the main process.
+  ipcMain.handle(IpcChannels.mcpGetState, () => {
+    // Refresh the persisted flags, then merge the live initialize/tools/list
+    // evidence maintained by the supervisor. A green toggle alone is not a
+    // connection guarantee.
+    return deps.runtime.refreshMcpState();
+  });
+  ipcMain.handle(IpcChannels.mcpSetEnabled, async (_e, payload: unknown) => {
+    const parsed = McpSetEnabledPayloadSchema.parse(payload);
+    setEmbeddedMcpEnabled(homeDir, parsed.id, parsed.enabled);
+    deps.runtime.refreshMcpState();
+    // The MCP composition is evaluated when the web child mounts Standard.
+    // Restart it so the toggle is effective for new and existing sessions;
+    // the shell itself and the persisted catalog remain intact.
+    deps.runtime.resetMcpStatus();
+    await runtime.supervisor.restart();
+    return deps.runtime.mcpState();
+  });
+  ipcMain.handle(IpcChannels.mcpOpenConfig, async () => {
+    const state = ensureEmbeddedMcpConfig(homeDir);
+    const failure = await shell.openPath(state.configPath);
+    if (failure) throw new Error(failure);
+  });
+
+  const offMcpStatus = deps.runtime.onMcpStatus((status) => {
+    for (const wc of rendererTargets()) wc.send(IpcChannels.mcpStatus, status);
+  });
+
   // torfleet:enable (invoke)
   ipcMain.handle(IpcChannels.torfleetEnable, async (_e, payload: unknown) => {
     const parsed = TorfleetEnablePayloadSchema.parse(payload);
@@ -140,14 +165,16 @@ export function registerIpc(deps: IpcDeps): () => void {
     binaryPath: null, // not exposed to renderer for security
   }));
 
-  // ocr:extract — extract text from a base64-encoded image
-  // Cap payload at ~32 MB decoded (base64 string ~43 MB) to prevent renderer abuse.
+  // ocr:extract — extract text from a bounded base64-encoded image. The
+  // canonical round-trip check rejects malformed base64 instead of silently
+  // turning it into a different/empty image.
   ipcMain.handle(IpcChannels.ocrExtract, async (_e, payload: unknown) => {
-    const parsed = z.object({
-      imageBase64: z.string().min(1).max(43_000_000),
-      lang: z.string().max(16).optional(),
-    }).parse(payload);
+    const parsed = OcrPayloadSchema.parse(payload);
     const buffer = Buffer.from(parsed.imageBase64, 'base64');
+    if (buffer.length === 0 || buffer.length > 25 * 1024 * 1024) throw new Error('OCR image exceeds the 25MB limit');
+    if (buffer.toString('base64').replace(/=+$/u, '') !== parsed.imageBase64.replace(/=+$/u, '')) {
+      throw new Error('OCR image payload is not valid base64');
+    }
     return extractText(buffer, { lang: parsed.lang });
   });
 
@@ -174,9 +201,13 @@ export function registerIpc(deps: IpcDeps): () => void {
     ipcMain.removeHandler(IpcChannels.poolRestartWorker);
     ipcMain.removeHandler(IpcChannels.poolResize);
     ipcMain.removeHandler(IpcChannels.settingsOpenFolder);
+    ipcMain.removeHandler(IpcChannels.mcpGetState);
+    ipcMain.removeHandler(IpcChannels.mcpSetEnabled);
+    ipcMain.removeHandler(IpcChannels.mcpOpenConfig);
     ipcMain.removeHandler(IpcChannels.torfleetEnable);
     ipcMain.removeHandler(IpcChannels.localeSet);
     ipcMain.removeHandler(IpcChannels.ocrExtract);
     ipcMain.removeHandler(IpcChannels.ocrStatus);
+    offMcpStatus();
   };
 }

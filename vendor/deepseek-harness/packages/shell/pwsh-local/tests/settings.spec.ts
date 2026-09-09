@@ -47,7 +47,7 @@ describe('pwsh executor over the bash settings section', () => {
     const bench = await boot()
     expect(bench.pwsh.config.timeoutMs).toBe(60_000)
     expect(bench.pwsh.config.rtk).toBe(true)
-    expect(bench.pwsh.config.caveman).toBe(false)
+    expect(bench.pwsh.config.caveman).toBe(true)
 
     await bench.ctx.settings.update(SHELL_SETTINGS_NAMESPACE, { timeoutMs: 5_000 })
 

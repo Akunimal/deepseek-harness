@@ -7,10 +7,13 @@
 
 import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 
 const APP_EXE_NAME = 'FreeCode DeepSeek Harness.exe';
-const DEFAULT_TIMEOUT_MS = 60_000;
+// The packaged runtime is intentionally large and starts the local model/MCP
+// pool before dsh reaches readiness. Keep enough headroom for a fresh install,
+// while still failing quickly on a deterministic native-loader crash.
+const DEFAULT_TIMEOUT_MS = 180_000;
 
 function nodeExecutable() {
   const candidates = [
@@ -140,9 +143,17 @@ async function launchAndProbe(installDir, label) {
       if (log.includes('harness runtime preflight failed')) {
         throw new Error(`installed-runtime: ${label} preflight failed:\n${log.slice(-4_000)}`);
       }
+      if (log.includes('harness supervisor gave up') || log.includes('dsh readiness timeout')) {
+        throw new Error(`installed-runtime: ${label} supervisor failed before readiness:\n${log.slice(-6_000)}`);
+      }
       if (log.includes('shell starting')) {
-        started = true;
-        break;
+        // shell starting only proves that Electron opened. Require the
+        // actual dsh readiness callback as well; otherwise a native-addon
+        // ABI crash can pass the install smoke while the UI is unusable.
+        if (log.includes('harness ready')) {
+          started = true;
+          break;
+        }
       }
       await new Promise((resolve) => setTimeout(resolve, 500));
     }
@@ -175,14 +186,15 @@ function runHeadlessCli(installDir, label) {
 
 export async function verifyInstalledRuntime({ installDir, label }) {
   if (process.platform !== 'win32') throw new Error('installed-runtime: this gate requires Windows');
-  runHeadlessCli(installDir, label);
-  await launchAndProbe(installDir, label);
+  const absoluteInstallDir = resolve(installDir);
+  runHeadlessCli(absoluteInstallDir, label);
+  await launchAndProbe(absoluteInstallDir, label);
 }
 
 export function stopInstalledProcesses(installDir) {
-  stopProcessesUnder(installDir);
+  stopProcessesUnder(resolve(installDir));
 }
 
 export function stopInstalledProcessesReferencing(installDir) {
-  stopProcessesReferencing(installDir);
+  stopProcessesReferencing(resolve(installDir));
 }

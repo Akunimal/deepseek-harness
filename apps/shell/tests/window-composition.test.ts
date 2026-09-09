@@ -184,6 +184,13 @@ describe('composition contract on production source', () => {
     expect(src).toMatch(/browser\.log/);
     expect(src).not.toMatch(/loadURL\(tab\.url\)\.catch\(\(\) => undefined\)/);
   });
+
+  it('does not expose the one-time harness token in desktop notifications', async () => {
+    const { readFileSync } = await import('node:fs');
+    const src = readFileSync(new URL('../src/main/index.ts', import.meta.url), 'utf8');
+    expect(src).toContain("t('notify.ready.body')");
+    expect(src).not.toMatch(/body:\s*h\.url/);
+  });
 });
 
 // keep vi imported for parity with adjacent tests that mock things

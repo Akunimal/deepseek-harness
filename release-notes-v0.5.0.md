@@ -2,121 +2,136 @@
 
 ## English
 
-### Anti-regression release
+### Windows-only anti-regression release
 
-The failed candidate was traced to an upstream sync that removed the Electron
-dialog bridge from the Win32 `directory-picker-native` source while the bundle
-freshness check still accepted a bridge-free artifact. v0.5.0 restores the
-authenticated bridge and makes the source markers, compiled bundle, hashes,
-preflight, installer layout, and isolated `v0.4.3` upgrade smoke agree on the
-same contract. A broken or truncated runtime now blocks packaging and points
-the user to the last known-good `v0.4.3`.
+0.5.0 publishes only Windows x64 NSIS and portable artifacts. Linux and macOS
+are contributor-only manual build targets; no Linux/macOS binary is built or
+uploaded for this release. The release gate requires a clean install and launch
+and deliberately does not require upgrading an existing 0.4.3 installation.
+`0.4.3` remains the last known-good recovery reference because it opens, but it
+is not the source of truth for the current fixes.
 
-### Main changes
+### User-visible changes
 
-- **Updater:** About reads the packaged Electron version; checks run at startup
-  and every six hours. The update control is the same 34px circular primary
-  button as Send, with the arrow pointing down. The tray tooltip/menu and a
-  native notification report `Downloading update…` and then `Installing
-  update…`. The installer is launched only after an explicit successful
-  `downloadUpdate()` and `quitAndInstall(true)`.
-- **Embedded MCP configuration:** Serena, TypeScript LSP, and Python LSP have
-  preinstalled client/config entries enabled by default, with independent
-  `enabled` switches in `<Electron userData>/dsh-home/mcp/servers.json`.
-  External executables are intentionally explicit prerequisites (`uvx`, Go,
-  and language servers); FreeCode does not silently download them.
-- **Caveman and RTK:** Both are modular toggles in the Shell settings card.
-  RTK defaults on only when already installed; Caveman defaults off and is
-  never downloaded by FreeCode. Unsafe shell syntax is excluded.
-- **Upstream maintenance:** Product changes are replayable patches under
-  `patches/upstream/`, applied after an upstream subtree update in a stable,
-  idempotent, fail-closed order.
-- **Hardening:** allowlisted child-process environments, validated IPC,
-  bounded OCR/request payloads, atomic settings/config writes, lifecycle
-  mutexes, safe installer upgrade cleanup, repaired NSIS shortcuts with a
-  correct `Start in` directory, and runtime closure verification. The smokes
-  inspect the real Start Menu/Desktop `.lnk` files and remove only temporary
-  links proven to point at the exact test directory.
+- Removed Gemini2API completely: no Gemini process, provider, selector model,
+  fallback or packaged resource remains. Existing unrelated providers and
+  historical sessions are preserved during migration.
+- Serena and free-search are bundled as managed MCP integrations, enabled by
+  default and independently toggleable in Settings → Plugins → MCP. Readiness
+  is real (`initialize → tools/list → schema validation → registration`),
+  Serena activates the selected project explicitly, and search does not open a
+  browser unless the user asks to view a result.
+- Added live MCP state, errors and registered-tool counts in the MCP settings
+  tab and tray. MCP, uvx, workers and OCR helpers are launched headlessly.
+- Caveman is on by default in the shell schema and configurable; RTK remains an
+  optional user-installed executable and is never bundled, downloaded or
+  falsely reported as active.
+- Added bounded Tesseract OCR fallback for direct image attachments and
+  `read_image` when the selected model has no vision support. Vision models
+  keep the original image, and OCR failures are explicit.
+- About uses the packaged Electron version. The update control matches Send
+  with a downward arrow, checks at startup and every six hours, and reports
+  download/install progress in the tray and native notifications.
+- Hardened supervisor/worker generations, process-tree shutdown and spawn
+  failures so stale exits cannot create duplicate dsh processes or visible
+  helper windows.
 
-### Upgrade
+### Upstream maintenance
 
-Update from `v0.4.3` using the Windows installer or portable build. Settings
-and data remain in `%APPDATA%` for installed builds and the portable `data`
-directory for portable builds. Linux users can use the AppImage; the first
-launch may take time while the bundled runtime initializes.
+The upstream subtree remains updateable. Product behavior is represented by an
+ordered, idempotent, fail-closed patch stack under `patches/upstream/`; the
+supported order is upstream update → apply patches → prepare → test/typecheck →
+build/package.
+
+### Verification
+
+`pnpm release:gate` passed locally with exit code 0. It covered workspace tests,
+contract tests, typechecks, Windows ACL paths, fresh vendor bundles, runtime
+closure, Electron ABI 133 native rebuild, real Serena/free-search MCP
+initialize/tools/list/tool calls, provider tool registration, a fresh NSIS
+install, shortcut working directories, headless startup, descendant-window
+enumeration, uninstall and cleanup.
+
+Assets built locally and ready for the manual Windows release upload:
+
+- `FreeCode-DeepSeek-Harness-0.5.0-win-x64-setup.exe` — 344,946,566 bytes —
+  SHA-256 `1b6a18744114c6ba8361ee1d4a706a1b97c7725fa35e552ea7284595f4081f06`
+- `FreeCode-DeepSeek-Harness-0.5.0-win-x64-portable.exe` — 344,784,077 bytes —
+  SHA-256 `01b9c7a9556728e4d6281c332201332482952f85d57973542892424d40f7faa5`
+- `FreeCode-DeepSeek-Harness-0.5.0-win-x64-setup.exe.blockmap` — 354,684 bytes —
+  SHA-256 `a2e839771de8563efb8f61b8e0fb21492fa0b63f0dd5484d309cd8b1ac7f5190`
+- `deepseek-harness-runtime-0.1.3-alpha.1-win32-x64.tar.gz` — 217,711,087
+  bytes — SHA-256
+  `1b8d719bb8b63e7f68ac9f32853033ef72c9dcb13d9de0cb24689249f6428179`
+- matching `latest.yml` and `.sha256` files
+
+The release is compiled and published manually from Windows. No GitHub Actions
+workflow is used.
 
 ---
 
 ## Español
 
-### Release anti-regresiones
+### Release anti-regresiones solo Windows
 
-El candidato fallido se rastreó hasta un sync con upstream que eliminó el
-bridge Electron del `directory-picker-native` de Win32 mientras el verificador
-de bundles todavía aceptaba un artefacto sin bridge. v0.5.0 restaura el bridge
-autenticado y hace que los markers de fuente, bundle compilado, hashes,
-preflight, layout del instalador y smoke aislado de upgrade desde `v0.4.3`
-compartan el mismo contrato. Un runtime roto o truncado bloquea el packaging y
-indica `v0.4.3` como última versión buena conocida.
+0.5.0 publica únicamente instalador NSIS y portable para Windows x64. Linux y
+macOS quedan como targets manuales de contribuidores; no se compila ni sube
+ningún binario de esos sistemas para esta release. El gate exige instalación y
+apertura limpia y deliberadamente no exige actualizar una instalación existente
+desde 0.4.3. `0.4.3` sigue siendo la referencia de recuperación conocida porque
+abre bien, pero no es la fuente de verdad de los fixes actuales.
 
-### Cambios principales
+### Cambios visibles
 
-- **Updater:** Acerca de lee la versión real del Electron empaquetado; comprueba
-  al iniciar y cada seis horas. El control de actualizar es el mismo botón
-  circular primario de 34 px que Enviar, con la flecha hacia abajo. El tooltip y
-  menú del tray, más una notificación nativa, informan `Descargando
-  actualización…` y luego `Instalando actualización…`. El instalador sólo se
-  lanza después de un `downloadUpdate()` explícito exitoso y
-  `quitAndInstall(true)`.
-- **Configuración MCP embebida:** Serena, LSP TypeScript y LSP Python tienen
-  entradas de cliente/config preinstaladas y activas por defecto, con toggles
-  independientes `enabled` en `<userData de Electron>/dsh-home/mcp/servers.json`.
-  Los ejecutables externos son prerequisites explícitos (`uvx`, Go y language
-  servers); FreeCode no los descarga silenciosamente.
-- **Caveman y RTK:** Ambos son toggles modulares en la tarjeta Shell de
-  Configuración. RTK se activa por defecto sólo si ya está instalado; Caveman
-  queda desactivado y FreeCode nunca lo descarga. Se excluye sintaxis insegura.
-- **Mantenimiento de upstream:** Las features del producto son patches
-  reaplicables en `patches/upstream/`, después de actualizar el subtree, en un
-  orden estable, idempotente y fail-closed.
-- **Hardening:** ambientes de procesos allowlisteados, IPC validado, límites
-  para OCR/requests, escrituras atómicas, mutexes de ciclo de vida, limpieza
-  segura del upgrade del instalador, accesos directos NSIS reparados con
-  `Iniciar en` correcto y verificación del cierre del runtime. Los smokes leen
-  los `.lnk` reales y eliminan sólo links temporales del directorio exacto de
-  prueba.
+- Gemini2API fue eliminado por completo: no quedan proceso Gemini, provider,
+  modelo del selector, fallback ni recurso empaquetado. La migración conserva
+  providers ajenos y sesiones históricas.
+- Serena y free-search vienen como MCP administrados, preinstalados, activos
+  por defecto y alternables en Configuración → Plugins → MCP. La readiness es
+  real (`initialize → tools/list → validación de schemas → registro`), Serena
+  activa explícitamente el proyecto elegido y buscar no abre el navegador salvo
+  que el usuario pida ver un resultado.
+- La tab MCP y la tray muestran estado, errores y cantidad de tools registradas.
+  MCP, uvx, workers y OCR se ejecutan headless.
+- Caveman queda activado por defecto en el schema del shell y es configurable;
+  RTK sigue siendo un ejecutable opcional instalado por el usuario, nunca
+  incluido, descargado ni mostrado como activo sin existir.
+- Se agregó fallback OCR acotado con Tesseract para adjuntos directos y
+  `read_image` cuando el modelo no tiene visión. Los modelos con visión
+  conservan la imagen y los fallos de OCR son explícitos.
+- About usa la versión del Electron empaquetado. El control de actualizar es
+  igual a Enviar con flecha hacia abajo, chequea al iniciar y cada seis horas,
+  y avisa descarga/instalación mediante tray y notificación nativa.
+- Se endurecieron generaciones de supervisor/workers, cierre del árbol de
+  procesos y errores de spawn para impedir dsh duplicados y ventanas visibles.
 
-### Actualización
+### Mantenimiento upstream
 
-Actualizá desde `v0.4.3` usando el instalador de Windows o la versión portable.
-Los ajustes y datos permanecen en `%APPDATA%` en builds instalados y en el
-directorio portable `data` en el portable. En Linux se puede usar la AppImage;
-el primer arranque puede tardar mientras inicializa el runtime incluido.
+El subtree upstream queda actualizable. El comportamiento propio está en un
+stack ordenado, idempotente y fail-closed bajo `patches/upstream/`; el orden es
+actualizar upstream → aplicar patches → preparar → test/typecheck →
+build/package.
 
----
+### Verificación
 
-**Assets built and smoke-verified locally:**
+`pnpm release:gate` pasó localmente con código 0. Cubrió tests, contratos,
+typechecks, ACL de Windows, bundles frescos, cierre del runtime, rebuild nativo
+ABI 133 de Electron, initialize/tools/list/tool calls reales de Serena y
+free-search, registro de tools en el provider, instalación NSIS limpia,
+working directory de accesos directos, arranque headless, enumeración de
+ventanas descendientes, desinstalación y limpieza.
 
-- `FreeCode-DeepSeek-Harness-0.5.0-win-x64-setup.exe` — 307,394,516 bytes — SHA-256 `c3e231ea1d5cbdfc85b211ca4363df968d2d1eb8a49a7a856666b9e648274cd0`
-- `FreeCode-DeepSeek-Harness-0.5.0-win-x64-setup.exe.blockmap` — 315,342 bytes — SHA-256 `495742d2ba2d53ff675b4da2fdae1fa62b0307e4549caf41ae3ba139bfe42b7c`
-- `FreeCode-DeepSeek-Harness-0.5.0-win-x64-portable.exe` — 307,232,024 bytes — SHA-256 `923e3d30cf32ca3f998f2e8e5bf209ad1e994bb2390d240528bef2cf546e8d1a`
-- `FreeCode-DeepSeek-Harness-0.5.0-linux-x86_64.AppImage` — 450,080,401 bytes — SHA-256 `5878cb8529743524980a40b04848887dbe43c565f69398bad01a08c7e7a0d7ab`
-- `deepseek-harness-runtime-0.1.3-alpha.1-win32-x64.tar.gz` — 208,855,139 bytes — SHA-256 `3f85e4dd31e04afdff2697b50545dbd3543aeaf498bc7290d43b654a03e3f1b2`
-- `deepseek-harness-runtime-0.1.3-alpha.1-linux-x64.tar.gz` — 443,434,519 bytes — SHA-256 `6a50a5db9d482869329626ffa5f1e047e7ea61df7f7865d054f09f02c74bb403`
-- `latest.yml` — 395 bytes — SHA-256 `8ff9e87b75aecc6a8f59e6a3228e9c71038e4732b30dd893f9a322d82be8ac4f`
-- `latest-linux.yml` — 428 bytes — SHA-256 `178af63fdc1c0642922f2192d1e9ec25b9023689cbd799617d3a72a6a71c7348`
+Artefactos compilados localmente y listos para la carga manual de Windows:
 
-The Windows gate passed a clean NSIS install and an isolated `v0.4.3` to
-`v0.5.0` upgrade. The Linux AppImage passed ELF, direct SquashFS entry,
-desktop/app version, runtime-manifest, metadata hash, worker, tray, and
-directory-picker bridge marker smokes. The final asset set is staged in
-`release-assets-v0.5.0/` for the manual release upload.
+- `FreeCode-DeepSeek-Harness-0.5.0-win-x64-setup.exe` — 344.946.566 bytes
+- `FreeCode-DeepSeek-Harness-0.5.0-win-x64-portable.exe` — 344.784.077 bytes
+- `FreeCode-DeepSeek-Harness-0.5.0-win-x64-setup.exe.blockmap` — 354.684 bytes
+- `deepseek-harness-runtime-0.1.3-alpha.1-win32-x64.tar.gz` — 217.711.087 bytes
+- `latest.yml` y archivos `.sha256` correspondientes
 
-Graphify `0.9.53` was refreshed against `apps/shell` with a reproducible
-structural graph (433 nodes, 749 edges, 20 communities). Semantic LLM
-extraction was not claimed because no Graphify API key was available.
+La release se compila y publica manualmente desde Windows. No se usa ningún
+workflow de GitHub Actions.
 
-**Source:** [`v0.4.3..v0.5.0`](https://github.com/Akunimal/free-code-deepseek-harness/compare/v0.4.3...v0.5.0)
-
-The release is built and published manually after the local release gate; no
-GitHub Actions release workflow is used.
+Graphify fue refrescado con un mapa estructural reproducible de `apps/shell`:
+433 nodos, 749 aristas y 20 comunidades; no se afirmó extracción semántica
+con LLM por falta de una API key de Graphify.

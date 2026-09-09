@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { join } from 'node:path';
 
 const ROOT = join(import.meta.dirname, '../../..');
+const resolveMcpSdk = createRequire(join(ROOT, 'vendor/deepseek-harness/packages/mcp/mcp-client/package.json'));
 
 /** Every shipped release-notes file, newest last. Kept version-agnostic so a
  *  new release does not require editing this contract (the old test pinned
@@ -14,7 +16,7 @@ function releaseNotesFiles(): string[] {
 }
 
 describe('release and runtime packaging contracts', () => {
-  it('keeps releases manual and multiplatform packaging available', () => {
+  it('keeps releases manual and Windows-only for 0.5.0', () => {
     const rootPackage = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')) as { version?: string };
     const shellPackageJson = JSON.parse(readFileSync(join(ROOT, 'apps/shell/package.json'), 'utf8')) as { version?: string };
     const shellPackage = readFileSync(join(ROOT, 'apps/shell/package.json'), 'utf8');
@@ -25,13 +27,14 @@ describe('release and runtime packaging contracts', () => {
     expect(policy).toContain('free GitHub Actions quota');
     expect(shellPackage).toContain('electron-builder --config electron-builder.yml --publish never');
     expect(rootScripts.scripts?.['release:gate']).toBe('node scripts/release-gate.mjs');
+    expect(rootScripts.scripts?.['build:vendor']).toContain('scripts/build-vendor-local.mjs');
     const releaseGate = readFileSync(join(ROOT, 'scripts/release-gate.mjs'), 'utf8');
     expect(releaseGate).toContain("runGit('whitespace validation', ['diff', '--check'])");
     expect(releaseGate).toContain("run('all workspace tests', ['test'])");
     expect(releaseGate).toContain("run('all workspace contract tests', ['test:contract'])");
     expect(releaseGate).toContain("run('all workspace typechecks', ['typecheck'])");
     expect(releaseGate).toContain("run('fresh NSIS install and installed-runtime smoke'");
-    expect(releaseGate).toContain("run('0.4.3 to candidate upgrade and installed-runtime smoke'");
+    expect(releaseGate).not.toContain('0.4.3 to candidate upgrade');
     expect(rootPackage.version).toBe('0.5.0');
     expect(shellPackageJson.version).toBe(rootPackage.version);
   });
@@ -89,9 +92,17 @@ describe('release and runtime packaging contracts', () => {
     expect(runtime).toContain('upstreamCommit');
     expect(runtime).toContain('git-subtree-split');
     expect(runtime).toContain('materialize-runtime.mjs');
+    expect(runtime).toContain('rebuild-runtime-native.mjs');
+    expect(runtime).toContain('0.5.0 is Windows-only');
+    expect(runtime).toContain('opencode2api-win-x64.exe');
+    expect(runtime).not.toContain('opencode2api-linux-x64');
+    expect(runtime).not.toContain('opencode2api-mac-x64');
+    expect(runtime).toContain('ELECTRON_RUN_AS_NODE=1');
     expect(runtime).not.toContain('--exclude=native');
     expect(materializer).toContain("'native'");
-    expect(materializer).toContain("entry.name === '.bin'");
+    expect(materializer).toContain('removeNestedNodeModules');
+    expect(materializer).toContain("path.join(stage, 'node_modules', '.bin')");
+    expect(materializer).toContain('recursively searching them for');
   });
 
   it('keeps the FreeCode browser, update indicator, and naming contracts aligned', () => {
@@ -146,6 +157,38 @@ describe('release and runtime packaging contracts', () => {
     expect(rtk).toContain('return false');
   });
 
+  it('keeps embedded MCP and child-process headless contracts explicit', () => {
+    const mcpConfig = readFileSync(join(ROOT, 'scripts/mcp-config.mjs'), 'utf8');
+    const mcpHome = readFileSync(join(ROOT, 'apps/shell/src/main/mcp-home.ts'), 'utf8');
+    const supervisor = readFileSync(join(ROOT, 'apps/shell/src/main/harness-supervisor.ts'), 'utf8');
+    const updater = readFileSync(join(ROOT, 'apps/shell/src/main/harness-updater.ts'), 'utf8');
+    const mcpTransport = readFileSync(join(ROOT, 'vendor/deepseek-harness/packages/mcp/mcp-client/src/transport.ts'), 'utf8');
+    // PNPM may expose the SDK through a virtual-store path rather than a
+    // physical vendor/node_modules/@scope symlink. Resolve it with the same
+    // package boundary Node uses at runtime.
+    const sdkStdio = readFileSync(resolveMcpSdk.resolve('@modelcontextprotocol/sdk/client/stdio.js'), 'utf8');
+
+    // Two distinct managed rows must remain present in both config seams;
+    // otherwise a host-only row can disappear from the model-facing preset.
+    for (const id of ['serena', 'free-search']) {
+      expect(mcpConfig, id).toContain(`id: '${id}'`);
+      expect(mcpHome, id).toContain(`id: '${id}'`);
+    }
+    expect(mcpConfig).not.toContain('mcp-language-server');
+    expect(mcpConfig).not.toContain('@anthropic-ai/serena-mcp');
+    expect(mcpConfig).not.toContain('@isaacphi/mcp-language-server');
+
+    // A future upstream refresh must not reintroduce visible console flashes
+    // for either the shell-owned child or update extraction.
+    expect(supervisor).toContain('HIDDEN_CHILD_PROCESS_OPTIONS');
+    expect(supervisor).toContain('windowsHide: true');
+    expect(supervisor).toContain('shell: false');
+    expect(updater).toContain('windowsHide: true');
+    expect(mcpTransport).toContain('new StdioClientTransport');
+    expect(mcpTransport).toContain("stderr: 'pipe'");
+    expect(sdkStdio).toMatch(/windowsHide:\s+(?:process|node_process_1\.default)\.platform === 'win32'/);
+  });
+
   it('guards the NSIS runtime truncation regression', () => {
     const installer = readFileSync(join(ROOT, 'apps/shell/build/installer.nsh'), 'utf8');
     const patcher = readFileSync(join(ROOT, 'apps/shell/build/patch-nsis.cjs'), 'utf8');
@@ -153,6 +196,7 @@ describe('release and runtime packaging contracts', () => {
     const upgradeSmoke = readFileSync(join(ROOT, 'scripts/verify-nsis-upgrade.mjs'), 'utf8');
     const shortcutSmoke = readFileSync(join(ROOT, 'scripts/verify-nsis-shortcuts.mjs'), 'utf8');
     const installedRuntime = readFileSync(join(ROOT, 'scripts/verify-installed-runtime.mjs'), 'utf8');
+    expect(installedRuntime).toContain('const DEFAULT_TIMEOUT_MS = 180_000');
     const hookGate = readFileSync(join(ROOT, 'scripts/verify-nsis-hooks.mjs'), 'utf8');
     const preflight = readFileSync(join(ROOT, 'apps/shell/src/main/preflight.ts'), 'utf8');
 
@@ -189,6 +233,8 @@ describe('release and runtime packaging contracts', () => {
     expect(patcher).toContain('dead uninstall helpers');
     expect(installedRuntime).toContain('visible descendant window detected');
     expect(installedRuntime).toContain('harness runtime preflight failed');
+    expect(installedRuntime).toContain('harness supervisor gave up');
+    expect(installedRuntime).toContain('harness ready');
     expect(installedRuntime).toContain('timeout: 120_000');
 
     // Preflight is bundled as ESM. A CommonJS require here throws at runtime,

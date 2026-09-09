@@ -1,12 +1,14 @@
-import { dialog, BrowserWindow } from 'electron';
+import { dialog, BrowserWindow, shell } from 'electron';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { randomBytes } from 'node:crypto';
+import { isAbsolute, resolve, sep } from 'node:path';
 import { t } from './i18n.js';
 
 const TOKEN_HEADER = 'x-freecode-dialog-token';
 
 export interface DialogBridge {
   endpoint: string;
+  fileOpenEndpoint: string;
   token: string;
   close(): Promise<void>;
 }
@@ -29,11 +31,12 @@ async function readBody(req: IncomingMessage): Promise<string> {
  * picker crashes under ELECTRON_RUN_AS_NODE; this bridge lets the Harness
  * delegate to the Electron main process instead.
  */
-export async function createDialogBridge(): Promise<DialogBridge> {
+export async function createDialogBridge(allowedRoot: string): Promise<DialogBridge> {
   const token = randomBytes(32).toString('hex');
+  const root = resolve(allowedRoot);
 
   const server = createServer((req, res) => {
-    if (req.method !== 'POST' || req.url !== '/pick-directory') {
+    if (req.method !== 'POST' || !['/pick-directory', '/open-text-file'].includes(req.url ?? '')) {
       reply(res, 404, { error: 'not found' });
       return;
     }
@@ -43,7 +46,26 @@ export async function createDialogBridge(): Promise<DialogBridge> {
     }
     void (async () => {
       try {
-        await readBody(req);
+        const body = await readBody(req);
+        if (req.url === '/open-text-file') {
+          const parsed = JSON.parse(body) as { path?: unknown };
+          if (typeof parsed.path !== 'string' || !isAbsolute(parsed.path)) {
+            reply(res, 400, { error: 'absolute file path is required' });
+            return;
+          }
+          const target = resolve(parsed.path);
+          if (target !== root && !target.startsWith(`${root}${sep}`)) {
+            reply(res, 403, { error: 'file path is outside the FreeCode settings directory' });
+            return;
+          }
+          const failure = await shell.openPath(target);
+          if (failure) {
+            reply(res, 500, { error: failure });
+            return;
+          }
+          reply(res, 200, { opened: true });
+          return;
+        }
         const parent = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0] ?? undefined;
         const result = await dialog.showOpenDialog(
           ...(parent ? [parent] : []) as [BrowserWindow],
@@ -70,6 +92,7 @@ export async function createDialogBridge(): Promise<DialogBridge> {
 
   return {
     endpoint,
+    fileOpenEndpoint: endpoint.replace('/pick-directory', '/open-text-file'),
     token,
     async close() {
       await new Promise<void>((resolve) => server.close(() => resolve()));

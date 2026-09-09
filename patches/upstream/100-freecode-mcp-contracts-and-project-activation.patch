@@ -1,0 +1,657 @@
+diff --git a/vendor/deepseek-harness/packages/mcp/mcp-client/src/connection.ts b/vendor/deepseek-harness/packages/mcp/mcp-client/src/connection.ts
+index f452e3a81d..f7cb6402da 100644
+--- a/vendor/deepseek-harness/packages/mcp/mcp-client/src/connection.ts
++++ b/vendor/deepseek-harness/packages/mcp/mcp-client/src/connection.ts
+@@ -20,7 +20,7 @@ import { ToolListChangedNotificationSchema } from '@modelcontextprotocol/sdk/typ
+ import type { Context } from '@deepseek-ai/cordis'
+ import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
+ import { createTransport } from './transport.ts'
+-import { syncTools } from './tools.ts'
++import { createProjectActivationState, syncTools } from './tools.ts'
+ import type { ToolBridgeOptions, ToolDisposers } from './tools.ts'
+ import type { Config } from './index.ts'
+ 
+@@ -126,6 +126,10 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
+     registrationFailure: 'contain',
+     serverName: config.serverName,
+     toolCallTimeoutMs: config.toolCallTimeoutMs,
++    ...(config.projectActivation === undefined ? {} : {
++      projectActivation: config.projectActivation,
++      projectActivationState: createProjectActivationState(),
++    }),
+   }
+   // The initial sync uses 'throw' when failOnStartupError is configured, so
+   // a registration conflict propagates to the startup-await path. Re-syncs
+@@ -243,6 +247,7 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
+     let attemptSettled = false
+     let closeObserved = false
+     const hasClosed = (): boolean => closeObserved
++    if (opts.projectActivationState !== undefined) opts.projectActivationState.activeProject = undefined
+     client = generation
+     clientClosed = closed.promise
+     generation.onclose = () => {
+@@ -268,19 +273,31 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
+         }
+       },
+     )
++    const transport = createTransport(config)
++    let stderrTail = ''
++    transport.stderr?.on('data', (chunk: Buffer | string) => {
++      // Retain enough context for one actionable failure without turning a
++      // noisy third-party server into an unbounded log or memory sink.
++      stderrTail = `${stderrTail}${String(chunk)}`.slice(-4_096)
++    })
+     try {
+-      await generation.connect(createTransport(config))
++      await generation.connect(transport)
+       if (hasClosed()) {
+         attemptSettled = true
+         generationDown(generation)
+         return
+       }
+       await enqueueSync(generation, startup ? startupOpts : opts)
++      ctx.logger.info(`${label}: ready; initialize -> tools/list -> schema validation -> ${disposers.size} tool(s) registered`)
++      publishHostStatus('ready', disposers.size)
+     } catch (error) {
+       if (firstAttemptError === undefined) firstAttemptError = error
+       // Disposal clears current ownership before it closes the generation, so
+       // only a live supervisor reports an attempt failure.
+-      if (isCurrent(generation)) ctx.logger.warn(`${label}: connection attempt failed: ${String(error)}`)
++      if (isCurrent(generation)) {
++        const diagnostic = stderrTail.trim()
++        ctx.logger.warn(`${label}: connection attempt failed: ${String(error)}${diagnostic ? `\n${diagnostic}` : ''}`)
++      }
+       try { await generation.close() } catch { /* transport already gone */ }
+       const quiesced = hasClosed() || await waitForClose(closed.promise)
+       attemptSettled = true
+@@ -301,7 +317,7 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
+     }
+     if (!isCurrent(generation)) return
+     connectedAt = Date.now()
+-    if (failedAttempts > 0) ctx.logger.info(`${label}: reconnected and re-synced tools (attempt ${failedAttempts}/${policy.maxAttempts})`)
++    if (failedAttempts > 0) ctx.logger.info(`${label}: reconnected and re-synced tools (attempt ${failedAttempts}/${policy.maxAttempts}; ${disposers.size} tool(s) registered)`)
+   }
+ 
+   /** The in-flight (or last settled) connection attempt; dispose awaits it for quiescence. */
+diff --git a/vendor/deepseek-harness/packages/mcp/mcp-client/src/index.ts b/vendor/deepseek-harness/packages/mcp/mcp-client/src/index.ts
+index 59ef928751..0c8b104d13 100644
+--- a/vendor/deepseek-harness/packages/mcp/mcp-client/src/index.ts
++++ b/vendor/deepseek-harness/packages/mcp/mcp-client/src/index.ts
+@@ -37,6 +37,20 @@ const DEFAULT_TOOL_CALL_TIMEOUT_MS = 60_000
+ /** Valid `serverName`, kept below the public tool-name budget. */
+ const SERVER_NAME_PATTERN = /^[A-Za-z0-9_-]{1,32}$/
+ 
++/**
++ * Optional per-session project activation for MCP servers whose state is
++ * scoped to one active workspace (for example Serena).
++ *
++ * The bridge supplies the selected session cwd immediately before a tool call;
++ * it never derives a project from the MCP child process cwd.
++ */
++export interface ProjectActivationConfig {
++  /** Raw MCP tool that activates one project. */
++  toolName: string
++  /** Required string argument receiving the selected session cwd. */
++  pathArgument: string
++}
++
+ /**
+  * Live `serverName` reservations per registration scope. Agent-scoped MCP
+  * servers may reuse a namespace in another Agent, while global instances and
+@@ -70,6 +84,8 @@ export interface StdioConfig {
+   failOnStartupError: boolean
+   /** Automatic reconnect policy after a lost connection; omission uses the defaults. */
+   reconnect?: ReconnectConfig
++  /** Optional automatic project activation contract for this MCP server. */
++  projectActivation?: ProjectActivationConfig
+ }
+ 
+ /** Config for connecting to an MCP server over Streamable HTTP (SSE). */
+@@ -92,6 +108,8 @@ export interface StreamableHttpConfig {
+   failOnStartupError: boolean
+   /** Automatic reconnect policy after a lost connection; omission uses the defaults. */
+   reconnect?: ReconnectConfig
++  /** Optional automatic project activation contract for this MCP server. */
++  projectActivation?: ProjectActivationConfig
+ }
+ 
+ /** Configuration for one stdio or Streamable HTTP MCP server. */
+@@ -110,6 +128,16 @@ const Reconnect: z<ReconnectConfig> = z.object({
+   maxAttempts: z.number().step(1).min(1).max(Number.MAX_SAFE_INTEGER).default(RECONNECT_DEFAULTS.maxAttempts),
+ })
+ 
++const PROJECT_ACTIVATION_NAME = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/
++const ProjectActivation: z<ProjectActivationConfig> = z.object({
++  toolName: z.string().required().pattern(PROJECT_ACTIVATION_NAME),
++  pathArgument: z.string().required().pattern(PROJECT_ACTIVATION_NAME),
++})
++const OptionalProjectActivation: z<ProjectActivationConfig | undefined> = z.union([
++  ProjectActivation,
++  z.const(undefined),
++])
++
+ export const Config = z.union([
+   z.object({
+     transport: z.const('stdio'),
+@@ -121,6 +149,7 @@ export const Config = z.union([
+     toolCallTimeoutMs: z.number().default(DEFAULT_TOOL_CALL_TIMEOUT_MS),
+     failOnStartupError: z.boolean().default(false),
+     reconnect: Reconnect,
++    projectActivation: OptionalProjectActivation,
+   }),
+   z.object({
+     transport: z.const('streamable-http'),
+@@ -130,6 +159,7 @@ export const Config = z.union([
+     toolCallTimeoutMs: z.number().default(DEFAULT_TOOL_CALL_TIMEOUT_MS),
+     failOnStartupError: z.boolean().default(false),
+     reconnect: Reconnect,
++    projectActivation: OptionalProjectActivation,
+   }),
+ ]) as unknown as z<ConfigInput, Config>
+ 
+diff --git a/vendor/deepseek-harness/packages/mcp/mcp-client/src/tools.ts b/vendor/deepseek-harness/packages/mcp/mcp-client/src/tools.ts
+index a580fd0c84..ada9fb5032 100644
+--- a/vendor/deepseek-harness/packages/mcp/mcp-client/src/tools.ts
++++ b/vendor/deepseek-harness/packages/mcp/mcp-client/src/tools.ts
+@@ -13,6 +13,8 @@
+  */
+ 
+ import { createHash } from 'node:crypto'
++import { realpathSync } from 'node:fs'
++import { resolve } from 'node:path'
+ import { isDeepStrictEqual } from 'node:util'
+ import type { Client } from '@modelcontextprotocol/sdk/client/index.js'
+ import { ListToolsResultSchema } from '@modelcontextprotocol/sdk/types.js'
+@@ -25,6 +27,7 @@ import type { ToolDefinition, ToolExecution, ToolExecutionResult } from '@deepse
+ import { assertSupportedJsonSchema } from '@deepseek-ai/dsh-tools'
+ import type { JsonSchemaNode } from '@deepseek-ai/dsh-tools'
+ import type { JsonValue } from '@deepseek-ai/dsh-util-values'
++import type { ProjectActivationConfig } from './index.ts'
+ 
+ /** Resolved options relevant to tool bridging. */
+ export interface ToolBridgeOptions {
+@@ -32,6 +35,75 @@ export interface ToolBridgeOptions {
+   registrationFailure: 'contain' | 'throw'
+   serverName: string
+   toolCallTimeoutMs: number
++  /** Optional contract for servers with one active project at a time. */
++  projectActivation?: ProjectActivationConfig
++  /** Connection-owned state shared by all tools and sync generations. */
++  projectActivationState?: ProjectActivationState
++}
++
++/** Stable outcome taxonomy emitted for every MCP tool invocation. */
++export type ToolCallStatus =
++  | 'success'
++  | 'failed-local'
++  | 'failed-mcp'
++  | 'failed-provider'
++  | 'failed-timeout'
++  | 'failed-permission'
++  | 'failed-invalid-response'
++
++class ToolCallFailure extends Error {
++  constructor(message: string, readonly status: Exclude<ToolCallStatus, 'success'>) {
++    super(message)
++    this.name = 'ToolCallFailure'
++  }
++}
++
++function classifyToolCallFailure(error: unknown): Exclude<ToolCallStatus, 'success'> {
++  if (error instanceof ToolCallFailure) return error.status
++  const message = error instanceof Error ? error.message : String(error)
++  if (/timed? out|timeout|aborted|cancell?ed/i.test(message)) return 'failed-timeout'
++  if (/permission|access denied|not allowed|sandbox|forbidden/i.test(message)) return 'failed-permission'
++  if (/provider|upstream|429|rate.?limit|api key|authentication/i.test(message)) return 'failed-provider'
++  if (/schema|invalid response|empty|no output|malformed|expected (?:an )?object/i.test(message)) return 'failed-invalid-response'
++  if (/mcp|json-?rpc|connection|transport|server|tools\/(?:list|call)/i.test(message)) return 'failed-mcp'
++  return 'failed-local'
++}
++
++function logToolCall(
++  ctx: Context,
++  opts: ToolBridgeOptions,
++  rawName: string,
++  requestId: string,
++  attempt: number,
++  startedAt: number,
++  status: ToolCallStatus,
++  error?: unknown,
++): void {
++  const record = {
++    requestId,
++    server: opts.serverName,
++    tool: rawName,
++    attempt,
++    status,
++    durationMs: Math.max(0, Math.round(performance.now() - startedAt)),
++    ...error === undefined ? {} : { error: error instanceof Error ? error.message.slice(0, 1_024) : String(error).slice(0, 1_024) },
++  }
++  // Keep the contract machine-readable while avoiding model arguments or
++  // image payloads in logs. One invocation produces exactly one record.
++  const line = `mcp tool call ${JSON.stringify(record)}`
++  if (status === 'success') ctx.logger.info(line)
++  else ctx.logger.error(line)
++}
++
++/** Mutable connection state used to serialize activation with the tool call. */
++export interface ProjectActivationState {
++  chain: Promise<void>
++  activeProject: string | undefined
++}
++
++/** Create fresh activation state for one MCP connection supervisor. */
++export function createProjectActivationState(): ProjectActivationState {
++  return { chain: Promise.resolve(), activeProject: undefined }
+ }
+ 
+ /** State for one sync generation: the current set of disposers keyed by public name. */
+@@ -82,19 +154,93 @@ function callToolUncached(
+   client: Client,
+   rawName: string,
+   args: Record<string, unknown>,
+-  exec: ToolExecution,
++  signal: AbortSignal,
+   opts: ToolBridgeOptions,
+ ) {
+   return client.request(
+     { method: 'tools/call', params: { name: rawName, arguments: args } },
+     RawCallToolResultSchema,
+     {
+-      signal: exec.signal,
++      signal,
+       timeout: opts.toolCallTimeoutMs,
+     },
+   )
+ }
+ 
++/** Canonicalize a workspace without making a missing/deleted workspace fatal. */
++export function canonicalProjectPath(project: string): string {
++  const absolute = resolve(project)
++  try { return realpathSync.native(absolute) } catch { return absolute }
++}
++
++/** Resolve the immutable, canonical workspace selected for the calling session. */
++function projectPathFor(exec: ToolExecution): string | undefined {
++  const cwd = exec.agent?.session.header?.cwd
++  return typeof cwd === 'string' && cwd.length > 0 ? canonicalProjectPath(cwd) : undefined
++}
++
++/** Extract a bounded, model-visible diagnostic from a failed activation call. */
++function activationFailure(result: Record<string, unknown>, toolName: string): Error {
++  let detail = 'the MCP server returned an error'
++  if (Array.isArray(result.content)) {
++    detail = extractText(result.content as unknown as JsonValue[], toolName).slice(0, 1_024)
++  } else if ('toolResult' in result) {
++    try { detail = JSON.stringify(result.toolResult).slice(0, 1_024) } catch { /* retain stable fallback */ }
++  }
++  return new Error(`project activation via MCP tool "${toolName}" failed: ${detail}`)
++}
++
++/**
++ * Call one MCP tool, activating the selected session workspace immediately
++ * before it when the server declares a project activation contract.
++ *
++ * Serena keeps one active project in one long-lived process. The activation
++ * and the dependent call therefore share one serialized queue; activating in
++ * a separate fire-and-forget request would let concurrent sessions switch the
++ * global project between those two requests.
++ */
++function callToolWithProjectActivation(
++  client: Client,
++  rawName: string,
++  args: Record<string, unknown>,
++  exec: ToolExecution,
++  opts: ToolBridgeOptions,
++): Promise<Record<string, unknown>> {
++  const activation = opts.projectActivation
++  const state = opts.projectActivationState
++  const project = projectPathFor(exec)
++  if (activation === undefined || state === undefined || project === undefined) {
++    return callToolUncached(client, rawName, args, exec.signal, opts)
++  }
++
++  const run = state.chain.catch(() => {}).then(async () => {
++    exec.signal.throwIfAborted()
++    if (rawName !== activation.toolName && state.activeProject !== project) {
++      const activated = await callToolUncached(
++        client,
++        activation.toolName,
++        { [activation.pathArgument]: project },
++        exec.signal,
++        opts,
++      )
++      if (activated.isError === true) throw activationFailure(activated, activation.toolName)
++      state.activeProject = project
++    }
++
++    const result = await callToolUncached(client, rawName, args, exec.signal, opts)
++    // A manual activate_project call remains supported and updates the local
++    // cache only after the server accepted it.
++    if (rawName === activation.toolName && result.isError !== true) {
++      const requested = args[activation.pathArgument]
++      if (typeof requested === 'string' && requested.length > 0) state.activeProject = requested
++    }
++    return result
++  })
++  // A failed call must not poison later independent calls in the same server.
++  state.chain = run.then(() => undefined, () => undefined)
++  return run
++}
++
+ /**
+  * Derive the model-facing public name for one MCP tool.
+  *
+@@ -147,6 +293,11 @@ export async function syncTools(
+   opts: ToolBridgeOptions,
+   previous: ToolDisposers,
+ ): Promise<ToolDisposers> {
++  // Tests and programmatic callers may omit the internal state. The
++  // connection supervisor supplies one that survives tool-list re-syncs.
++  const bridgeOpts = opts.projectActivation !== undefined && opts.projectActivationState === undefined
++    ? { ...opts, projectActivationState: createProjectActivationState() }
++    : opts
+   // Phase 1: fetch and build the next generation without touching the registry.
+   const definitions = new Map<string, ToolDefinition>()
+   let cursor: string | undefined
+@@ -168,7 +319,7 @@ export async function syncTools(
+         tool.inputSchema,
+         supportedOutputSchema(tool.outputSchema),
+         tool.execution?.taskSupport === 'required',
+-        opts,
++        bridgeOpts,
+       ))
+     }
+     cursor = response.nextCursor
+@@ -310,54 +461,85 @@ function createExecutor(
+   projections: WeakMap<ToolExecution, PreparedProjection>,
+ ): ToolDefinition['execute'] {
+   return async (args: unknown, exec: ToolExecution) => {
+-    if (taskRequired) {
+-      throw new Error(`Tool "${rawName}" requires task-based execution, which this bridge does not support`)
+-    }
+-    // The agent loop passes `JSON.parse(model_arguments)` which is usually an
+-    // object, but can be any JSON value if the model misbehaves (outputs a bare
+-    // string/number/null). Fallback to {} lets the MCP server produce a
+-    // specific "missing required param" error the model can learn from.
+-    const argsObj = (typeof args === 'object' && args !== null ? args : {}) as Record<string, unknown>
+-    const result = await callToolUncached(client, rawName, argsObj, exec, opts)
+-
+-    // The SDK may return a legacy `toolResult` shape; normalize to content array.
+-    if (!Array.isArray(result.content)) {
+-      const rendered: unknown = 'toolResult' in result
+-        ? JSON.stringify(result.toolResult)
+-        : '(no output)'
+-      const text = typeof rendered === 'string' ? rendered : '(no output)'
+-      if (result.isError === true) throw new Error(text)
+-      return {
+-        content: [{ type: 'text', text }],
++    const requestId = String(exec.callId ?? 'unknown')
++    const startedAt = performance.now()
++    let status: ToolCallStatus = 'success'
++    let failure: unknown
++    try {
++      if (taskRequired) {
++        throw new ToolCallFailure(
++          `Tool "${rawName}" requires task-based execution, which this bridge does not support`,
++          'failed-local',
++        )
++      }
++      // The agent loop passes `JSON.parse(model_arguments)` which is usually an
++      // object, but can be any JSON value if the model misbehaves (outputs a bare
++      // string/number/null). Fallback to {} lets the MCP server produce a
++      // specific "missing required param" error the model can learn from.
++      const argsObj = (typeof args === 'object' && args !== null ? args : {}) as Record<string, unknown>
++      const result = await callToolWithProjectActivation(client, rawName, argsObj, exec, opts)
++
++      // The SDK may return a legacy `toolResult` shape; normalize to content array.
++      if (!Array.isArray(result.content)) {
++        if (result.isError === true) {
++          const renderedError = 'toolResult' in result ? JSON.stringify(result.toolResult) : undefined
++          throw new ToolCallFailure(
++            typeof renderedError === 'string' && renderedError.length > 0
++              ? renderedError
++              : `${rawName} returned an MCP error without content`,
++            'failed-mcp',
++          )
++        }
++        if (!('toolResult' in result)) {
++          throw new ToolCallFailure(`${rawName} returned an invalid response without content`, 'failed-invalid-response')
++        }
++        const rendered: unknown = JSON.stringify(result.toolResult)
++        if (typeof rendered !== 'string' || rendered.length === 0) {
++          throw new ToolCallFailure(`${rawName} returned an empty MCP response`, 'failed-invalid-response')
++        }
++        const text = rendered
++        return {
++          content: [{ type: 'text', text }],
++          ...result.structuredContent !== undefined
++            ? { structuredContent: result.structuredContent as JsonValue }
++            : {},
++        }
++      }
++
++      // Trust boundary: the SDK's return type erases to `any[]` due to the
++      // union of CallToolResult | CompatibilityCallToolResult; extractText
++      // validates each element.
++      const content = result.content as unknown as JsonValue[]
++      if (result.isError === true) {
++        throw new ToolCallFailure(
++          content.length > 0 ? extractText(content, rawName) : `${rawName} returned an MCP error without content`,
++          'failed-mcp',
++        )
++      }
++      if (content.length === 0) {
++        throw new ToolCallFailure(`${rawName} returned an empty MCP response`, 'failed-invalid-response')
++      }
++      const text = extractText(content, rawName)
++
++      const value: McpResult = {
++        content,
+         ...result.structuredContent !== undefined
+           ? { structuredContent: result.structuredContent as JsonValue }
+           : {},
+       }
++      if (containsImage(content)) {
++        const fallback: ContentBlock[] = [{ type: 'text', text }]
++        const projected = await prepareImageProjection(ctx, exec, content, rawName)
++        projections.set(exec, { value, fallback, content: projected })
++      }
++      return value
++    } catch (error: unknown) {
++      status = classifyToolCallFailure(error)
++      failure = error
++      throw error
++    } finally {
++      logToolCall(ctx, opts, rawName, requestId, 1, startedAt, status, failure)
+     }
+-
+-    // Trust boundary: the SDK's return type erases to `any[]` due to the
+-    // union of CallToolResult | CompatibilityCallToolResult; extractText
+-    // validates each element.
+-    const content = result.content as unknown as JsonValue[]
+-    const text = extractText(content, rawName)
+-
+-    // MCP isError → throw so ToolRuntime produces an isError result for the model.
+-    if (result.isError === true) {
+-      throw new Error(text)
+-    }
+-
+-    const value: McpResult = {
+-      content,
+-      ...result.structuredContent !== undefined
+-        ? { structuredContent: result.structuredContent as JsonValue }
+-        : {},
+-    }
+-    if (containsImage(content)) {
+-      const fallback: ContentBlock[] = [{ type: 'text', text: extractText(content, rawName) }]
+-      const projected = await prepareImageProjection(ctx, exec, content, rawName)
+-      projections.set(exec, { value, fallback, content: projected })
+-    }
+-    return value
+   }
+ }
+ 
+diff --git a/vendor/deepseek-harness/packages/mcp/mcp-client/tests/apply.spec.ts b/vendor/deepseek-harness/packages/mcp/mcp-client/tests/apply.spec.ts
+index 1b1716e51b..b043613ee7 100644
+--- a/vendor/deepseek-harness/packages/mcp/mcp-client/tests/apply.spec.ts
++++ b/vendor/deepseek-harness/packages/mcp/mcp-client/tests/apply.spec.ts
+@@ -126,6 +126,22 @@ describe('mcp-client plugin module exports', () => {
+     expect(resolved.serverName).toBe('github-prod_1')
+   })
+ 
++  it('Config schema preserves a bounded project activation contract', () => {
++    const resolved = ConfigSchema({
++      transport: 'stdio',
++      serverName: 'serena',
++      command: 'uvx',
++      projectActivation: { toolName: 'activate_project', pathArgument: 'project' },
++    } as never)
++    expect(resolved.projectActivation).toEqual({ toolName: 'activate_project', pathArgument: 'project' })
++    expect(() => ConfigSchema({
++      transport: 'stdio',
++      serverName: 'serena',
++      command: 'uvx',
++      projectActivation: { toolName: 'activate project', pathArgument: 'project' },
++    } as never)).toThrow()
++  })
++
+   it('Config schema materializes reconnect defaults and merges partial overrides', () => {
+     const omitted = ConfigSchema({
+       transport: 'stdio',
+diff --git a/vendor/deepseek-harness/packages/mcp/mcp-client/tests/mcp-client.spec.ts b/vendor/deepseek-harness/packages/mcp/mcp-client/tests/mcp-client.spec.ts
+index 605a31ece1..2397afe183 100644
+--- a/vendor/deepseek-harness/packages/mcp/mcp-client/tests/mcp-client.spec.ts
++++ b/vendor/deepseek-harness/packages/mcp/mcp-client/tests/mcp-client.spec.ts
+@@ -129,11 +129,11 @@ async function mountRichRegistry(): Promise<{ ctx: Context; attachments: Recordi
+   return { ctx, attachments: ctx.attachments as RecordingAttachmentStore }
+ }
+ 
+-/** Calling-agent stand-in with no durable request header yet. */
+-function agentOn(model: string | undefined = 'vision'): object {
++/** Calling-agent stand-in with a durable workspace header. */
++function agentOn(model: string | undefined = 'vision', cwd = '/workspace/project'): object {
+   return {
+     options: model === undefined ? {} : { provider: 'visual', model },
+-    session: { requestHeader: () => undefined },
++    session: { header: { cwd }, requestHeader: () => undefined },
+   }
+ }
+ 
+@@ -414,6 +414,37 @@ describe('tool execution', () => {
+     )
+   })
+ 
++  it('emits one redacted, machine-readable tool-call contract record', async () => {
++    const info = vi.spyOn(ctx.logger, 'info').mockImplementation(() => undefined)
++    const client = createMockClient(
++      [{ name: 'contract', inputSchema: { type: 'object' } }],
++      { content: [{ type: 'text', text: 'ok' }] },
++    )
++    await syncTools(client as never, ctx, defaultOpts, new Map())
++    await ctx.tools.execute({
++      signal: testToolSignal,
++      callId: ToolCallId('contract-call'),
++      name: 'mcp__srv__contract',
++      arguments: { secret: 'must not be logged' },
++    })
++
++    const line = info.mock.calls
++      .map(call => call.map(value => String(value)).join(' '))
++      .find(value => value.startsWith('mcp tool call '))
++    expect(line).toBeDefined()
++    const record = JSON.parse(line!.slice('mcp tool call '.length)) as Record<string, unknown>
++    expect(record).toMatchObject({
++      requestId: 'contract-call',
++      server: 'srv',
++      tool: 'contract',
++      attempt: 1,
++      status: 'success',
++    })
++    expect(record).not.toHaveProperty('secret')
++    expect(record.durationMs).toEqual(expect.any(Number))
++    info.mockRestore()
++  })
++
+   it('sends the raw name for normalized public names', async () => {
+     const client = createMockClient(
+       [{ name: 'admin.reset', inputSchema: { type: 'object' } }],
+@@ -823,12 +854,12 @@ describe('tool execution', () => {
+         inputSchema: { type: 'object' },
+         outputSchema: { type: 'object', patternProperties: { '^x-': { type: 'string' } } },
+       }],
+-      { content: [], structuredContent: ['kept', { nested: true }] },
++      { content: [{ type: 'text', text: 'kept' }], structuredContent: ['kept', { nested: true }] },
+     )
+     await syncTools(client as never, ctx, defaultOpts, new Map())
+     const result = await ctx.tools.execute({ signal: testToolSignal, callId: ToolCallId('fallback'), name: 'mcp__srv__future-schema', arguments: {} })
+     if (result.isError) throw new Error('unsupported MCP output schemas must fall back')
+-    expect(result.value).toEqual({ content: [], structuredContent: ['kept', { nested: true }] })
++    expect(result.value).toEqual({ content: [{ type: 'text', text: 'kept' }], structuredContent: ['kept', { nested: true }] })
+   })
+ 
+   it('maps isError to an error result via throw', async () => {
+@@ -878,6 +909,33 @@ describe('tool execution', () => {
+     )
+   })
+ 
++  it('automatically activates the calling session workspace before Serena tools', async () => {
++    const client = createMockClient([
++      { name: 'activate_project', inputSchema: { type: 'object' } },
++      { name: 'get_current_config', inputSchema: { type: 'object' } },
++    ])
++    const opts: ToolBridgeOptions = {
++      ...defaultOpts,
++      serverName: 'serena',
++      projectActivation: { toolName: 'activate_project', pathArgument: 'project' },
++    }
++    await syncTools(client as never, ctx, opts, new Map())
++
++    const result = await ctx.tools.execute({
++      signal: testToolSignal,
++      callId: ToolCallId('serena-config'),
++      name: 'mcp__serena__get_current_config',
++      arguments: {},
++      agent: agentOn('vision', 'C:\\Projects\\Hermes') as never,
++    })
++
++    expect(result.isError).toBe(false)
++    expect(client.callTool.mock.calls.slice(0, 2).map(call => call[0])).toEqual([
++      { name: 'activate_project', arguments: { project: 'C:\\Projects\\Hermes' } },
++      { name: 'get_current_config', arguments: {} },
++    ])
++  })
++
+   it('handles legacy toolResult shape', async () => {
+     const client = createMockClient(
+       [{ name: 'legacy', inputSchema: { type: 'object' } }],
+@@ -1052,7 +1110,8 @@ describe('tool execution edge cases', () => {
+     await syncTools(client as never, ctx, defaultOpts, new Map())
+     const result = await ctx.tools.execute({ signal: testToolSignal, callId: ToolCallId('c1'), name: 'mcp__srv__empty_tool', arguments: {} })
+ 
+-    expect(result.content[0]).toEqual({ type: 'text', text: '(empty_tool returned no model-visible content)' })
++    expect(result.isError).toBe(true)
++    expect(result.content[0]).toEqual({ type: 'text', text: 'Error: empty_tool returned an empty MCP response' })
+   })
+ 
+ 
+@@ -1065,7 +1124,8 @@ describe('tool execution edge cases', () => {
+     await syncTools(client as never, ctx, defaultOpts, new Map())
+     const result = await ctx.tools.execute({ signal: testToolSignal, callId: ToolCallId('c1'), name: 'mcp__srv__legacy2', arguments: {} })
+ 
+-    expect(result.content[0]).toEqual({ type: 'text', text: '(no output)' })
++    expect(result.isError).toBe(true)
++    expect(result.content[0]).toEqual({ type: 'text', text: 'Error: legacy2 returned an empty MCP response' })
+   })
+ 
+   it('handles a legacy result with neither content nor toolResult', async () => {
+@@ -1077,7 +1137,8 @@ describe('tool execution edge cases', () => {
+     await syncTools(client as never, ctx, defaultOpts, new Map())
+     const result = await ctx.tools.execute({ signal: testToolSignal, callId: ToolCallId('legacy-empty'), name: 'mcp__srv__legacy-empty', arguments: {} })
+ 
+-    expect(result.content[0]).toEqual({ type: 'text', text: '(no output)' })
++    expect(result.isError).toBe(true)
++    expect(result.content[0]).toEqual({ type: 'text', text: 'Error: legacy-empty returned an invalid response without content' })
+   })
+ 
+   it('handles isError with non-text content (fallback error message)', async () => {

@@ -1,6 +1,6 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
-import type { JsonValue } from '@deepseek-ai/dsh-tools'
+import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 
 /** Actions supported by the FreeCode embedded Chromium browser bridge. */
 export const BROWSER_ACTIONS = ['status', 'tabs', 'new_tab', 'select_tab', 'close_tab', 'wait', 'navigate', 'snapshot', 'click', 'type', 'key', 'scroll', 'back', 'forward', 'reload', 'screenshot'] as const

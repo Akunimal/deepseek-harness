@@ -1,0 +1,891 @@
+diff --git a/vendor/deepseek-harness/packages/fs/tool-fs/src/read-image.ts b/vendor/deepseek-harness/packages/fs/tool-fs/src/read-image.ts
+index 3115473515..ab177516e7 100644
+--- a/vendor/deepseek-harness/packages/fs/tool-fs/src/read-image.ts
++++ b/vendor/deepseek-harness/packages/fs/tool-fs/src/read-image.ts
+@@ -4,10 +4,9 @@
+  * attachment service's full decode stays authoritative. The mounted `ctx.fs`
+  * backend owns path resolution and read access; names only declare media type.
+  *
+- * The route gate is deliberately stricter than the host upload preflight. An
+- * image-reading tool is useful only when the exact calling route can inspect
+- * its result, so unknown capability refuses instead of relying on an adapter
+- * failure after filesystem and attachment work.
++ * Vision routes receive a durable image block. Text-only routes use the
++ * product-managed OCR bridge and receive bounded text instead; unknown
++ * capability still refuses before filesystem work.
+  * @module @deepseek-ai/dsh-tool-fs/src/read-image
+  */
+ 
+@@ -16,6 +15,7 @@ import type { Context } from '@deepseek-ai/cordis'
+ import { AttachmentError, AttachmentId } from '@deepseek-ai/dsh-attachment'
+ import type { AttachmentStore, ImageAttachmentRef, ImageMediaType } from '@deepseek-ai/dsh-attachment'
+ import type { ContentBlock } from '@deepseek-ai/dsh-llm'
++import { extractTextFromImage } from '@deepseek-ai/dsh-llm'
+ import { defineTool } from '@deepseek-ai/dsh-tools'
+ import type { GenericCallView, ToolExecution } from '@deepseek-ai/dsh-tools'
+ import type {} from '@deepseek-ai/dsh-fs'
+@@ -62,7 +62,6 @@ export function sniffImageMediaType(data: Uint8Array): ImageMediaType | undefine
+ const IMAGE_VALUE_SCHEMA = {
+   type: 'object',
+   additionalProperties: false,
+-  required: true,
+   properties: {
+     attachmentId: { type: 'string', required: true },
+     mediaType: { type: 'string', enum: ['image/png', 'image/jpeg', 'image/webp', 'image/gif'], required: true },
+@@ -84,7 +83,7 @@ const IMAGE_VALUE_SCHEMA = {
+ /** The structured outcome declared by the `read_image` output schema. */
+ export interface ImageReadValue {
+   path: string
+-  image: {
++  image?: {
+     attachmentId: string
+     mediaType: ImageMediaType
+     bytes: number
+@@ -97,6 +96,7 @@ export interface ImageReadValue {
+       height: number
+     }
+   }
++  ocrText?: string
+ }
+ 
+ /**
+@@ -116,7 +116,11 @@ export function imageMediaTypeForPath(filePath: string): ImageMediaType | undefi
+  * @param exec - the tool-execution context supplying the calling agent.
+  * @param requestedPath - the raw, not-yet-resolved path rendered in refusal messages.
+  */
+-export async function assertImageCapableRoute(ctx: Context, exec: ToolExecution, requestedPath: string): Promise<void> {
++export async function resolveImageRoute(
++  ctx: Context,
++  exec: ToolExecution,
++  requestedPath: string,
++): Promise<{ model: string; vision: boolean }> {
+   const routed = exec.agent?.session.requestHeader()?.config
+   const provider = routed?.provider ?? exec.agent?.options.provider
+   const model = routed?.model ?? exec.agent?.options.model
+@@ -125,8 +129,14 @@ export async function assertImageCapableRoute(ctx: Context, exec: ToolExecution,
+     throw new Error(`cannot read "${requestedPath}" as an image: the current model route could not be resolved`)
+   }
+   const active = await llm.resolveModelInfo(provider, model, exec.signal)
+-  if (active.inputModalities === undefined || !active.inputModalities.includes('image')) {
+-    throw new Error(`cannot read "${requestedPath}" as an image: model "${model}" does not declare image input; switch to an image-capable model to read images`)
++  return { model, vision: active.inputModalities?.includes('image') === true }
++}
++
++/** Preserve the historical exported guard for callers that require vision. */
++export async function assertImageCapableRoute(ctx: Context, exec: ToolExecution, requestedPath: string): Promise<void> {
++  const route = await resolveImageRoute(ctx, exec, requestedPath)
++  if (!route.vision) {
++    throw new Error(`cannot read "${requestedPath}" as an image: model "${route.model}" does not declare image input; OCR is available for text-only requests`)
+   }
+ }
+ 
+@@ -146,7 +156,7 @@ function assertDeploymentAccepts(attachments: AttachmentStore, mediaType: ImageMediaType, displayPath: string): void {
+  * @param image - the image metadata from the output schema.
+  * @returns the branded attachment reference.
+  */
+-export function imageRefFromValue(image: ImageReadValue['image']): ImageAttachmentRef {
++export function imageRefFromValue(image: NonNullable<ImageReadValue['image']>): ImageAttachmentRef {
+   return {
+     attachmentId: AttachmentId(image.attachmentId),
+     mediaType: image.mediaType,
+@@ -168,7 +178,7 @@ export function imageRefFromValue(image: ImageReadValue['image']): ImageAttachmentRef {
+  * @param image - the image metadata to summarize.
+  * @returns the model-facing envelope; the image itself rides the adjacent image block.
+  */
+-export function formatImageReadOutput(displayPath: string, image: ImageReadValue['image']): string {
++export function formatImageReadOutput(displayPath: string, image: NonNullable<ImageReadValue['image']>): string {
+   let scaled = ''
+   if (image.originalDimensions !== undefined) {
+     // Integer rounding can give the two axes slightly different ratios, so the
+@@ -190,6 +200,13 @@ ${image.mediaType} image, ${image.width}x${image.height} px, ${image.bytes} byte
+  * @returns the two content blocks used by native and nested dispatches.
+  */
+ function imageReadContent(value: ImageReadValue): ContentBlock[] {
++  if (value.ocrText !== undefined) {
++    return [{
++      type: 'text',
++      text: `<path>${value.path}</path>\n<type>ocr</type>\n<content>\n${value.ocrText}\n</content>`,
++    }]
++  }
++  if (value.image === undefined) return [{ type: 'text', text: `(${value.path} returned no image or OCR text)` }]
+   return [
+     { type: 'text', text: formatImageReadOutput(value.path, value.image) },
+     { type: 'image', attachment: imageRefFromValue(value.image) },
+@@ -208,10 +225,10 @@ function imageReadContent(value: ImageReadValue): ContentBlock[] {
+ export function applyReadImageTool(ctx: Context): void {
+   ctx.tools.register(defineTool({
+     name: 'read_image',
+-    description: 'Read a PNG/JPEG/WebP/GIF file and return the image itself. '
++    description: 'Read a PNG/JPEG/WebP/GIF file and return the image itself, or run the bundled OCR bridge for a text-only model. '
+       + 'A path without a file extension is accepted; the format is detected from the file content, so normalized attachment paths can be passed directly without copying or renaming. '
+       + 'Harness validates and downscales large supported images before the next model request, so use this tool directly instead of installing image libraries or creating thumbnails merely to inspect an image. '
+-      + 'Independent files may be read concurrently in small batches. Requires the current model to accept image input.',
++      + 'Independent files may be read concurrently in small batches. Vision models receive the image; text-only models receive OCR text.',
+     parameters: {
+       file_path: { type: 'string', required: true, description: 'Path to the image file, resolved by the filesystem backend.' },
+     },
+@@ -222,6 +239,7 @@ export function applyReadImageTool(ctx: Context): void {
+         properties: {
+           path: { type: 'string', required: true },
+           image: IMAGE_VALUE_SCHEMA,
++          ocrText: { type: 'string' },
+         },
+       },
+       render: (_args, value) => imageReadContent(value),
+@@ -255,7 +273,7 @@ export function applyReadImageTool(ctx: Context): void {
+         throw new Error(`cannot read "${args.file_path}" as an image: no attachment service is mounted`)
+       }
+       if (declared !== undefined) assertDeploymentAccepts(attachments, declared, args.file_path)
+-      await assertImageCapableRoute(ctx, exec, args.file_path)
++      const route = await resolveImageRoute(ctx, exec, args.file_path)
+ 
+       const { target, info } = await resolveRegularReadTarget(ctx, exec, args.file_path)
+ 
+@@ -268,6 +286,16 @@ export function applyReadImageTool(ctx: Context): void {
+         throw new Error(`cannot read "${target.displayPath}": the file content is not a supported image format; read_image accepts PNG/JPEG/WebP/GIF`)
+       }
+       if (declared === undefined) assertDeploymentAccepts(attachments, mediaType, target.displayPath)
++      if (!route.vision) {
++        // Validate dimensions/decoding through the deployment's authoritative
++        // image admission path, but do not persist an image the text-only
++        // route cannot consume. OCR receives the already-resolved target path,
++        // never a model-provided path or shell command.
++        await attachments.validateImage({ data, mediaType, name: basename(target.displayPath) })
++        const ocrText = await extractTextFromImage(ctx.fs.processPath(target), { signal: exec.signal })
++        ctx.emit('fs/observed', target, { kind: 'present', version: info.version }, exec)
++        return { path: target.displayPath, ocrText }
++      }
+       // Persist before returning: the image block must reference a durably
+       // committed object by the time the tool/result event is appended.
+       let ref: ImageAttachmentRef
+diff --git a/vendor/deepseek-harness/packages/fs/tool-fs/tests/read-image.spec.ts b/vendor/deepseek-harness/packages/fs/tool-fs/tests/read-image.spec.ts
+index d5b4dc5b46..24fc4f0d11 100644
+--- a/vendor/deepseek-harness/packages/fs/tool-fs/tests/read-image.spec.ts
++++ b/vendor/deepseek-harness/packages/fs/tool-fs/tests/read-image.spec.ts
+@@ -1,7 +1,7 @@
+ /**
+  * The `read_image` tool over the REAL local filesystem and attachment store:
+  * extension routing, extension-less content sniffing (attachment object paths
+- * included), the strict image-modality gate (every refusal arm), durable
++ * included), the vision/OCR route gate, durable
+  * commit + image-block rendering, attachment admission failures, and the
+  * regression that `read` keeps its text-only contract.
+  */
+@@ -13,7 +13,7 @@ import { join } from 'node:path'
+ import { Context } from '@deepseek-ai/cordis'
+ import { CodeRuntime } from '@deepseek-ai/dsh-code-runtime'
+ import type { CodeRunRequest, CodeRunResult } from '@deepseek-ai/dsh-code-runtime'
+-import { ToolCallId, LlmAdapter, LlmRuntime } from '@deepseek-ai/dsh-llm'
++import { ToolCallId, LlmAdapter, LlmRuntime, setOcrRunnerForTests } from '@deepseek-ai/dsh-llm'
+ import type { GenerateOptions, LlmModelInfo, LlmResolvedModelInfo, Message, StreamChunk } from '@deepseek-ai/dsh-llm'
+ import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
+ import ToolRuntime, { RUN_CODE_NAME } from '@deepseek-ai/dsh-tools'
+@@ -450,7 +450,7 @@ describe('extension-less paths', () => {
+   })
+ })
+ 
+-describe('strict image-modality gate', () => {
++describe('vision and OCR route gate', () => {
+   it('accepts an exact visual route even when the advisory model catalog omits it', async () => {
+     await writeFile(join(dir, 'red.png'), PNG_1X1)
+     const ctx = await setup({
+@@ -467,12 +467,27 @@ describe('strict image-modality gate', () => {
+     ['a text-only model', 'text-model'],
+     ['a model without declared modalities', 'legacy-model'],
+     ['a model absent from the catalog', 'unknown-model'],
+-  ])('refuses on %s', async (_label, model) => {
++  ])('uses the bounded OCR bridge on %s', async (_label, model) => {
+     await writeFile(join(dir, 'red.png'), PNG_1X1)
+     const ctx = await setup()
+     const result = await readImage(ctx, { file_path: 'red.png' }, agentOn(model))
+     expect(result.isError).toBe(true)
+-    expect(text(result)).toContain('does not declare image input')
++    expect(text(result)).toContain('OCR process could not start')
++  })
++
++  it('returns OCR text instead of an image for a text-only route', async () => {
++    await writeFile(join(dir, 'red.png'), PNG_1X1)
++    const restore = setOcrRunnerForTests(async () => 'text extracted from image')
++    try {
++      const ctx = await setup()
++      const result = await readImage(ctx, { file_path: 'red.png' }, agentOn('text-model'))
++      expect(result.isError).toBe(false)
++      expect(result.content).toHaveLength(1)
++      expect(text(result)).toContain('<type>ocr</type>')
++      expect(text(result)).toContain('text extracted from image')
++    } finally {
++      restore()
++    }
+   })
+ 
+   it('refuses when the route cannot be resolved (no agent, or no header and no options)', async () => {
+diff --git a/vendor/deepseek-harness/packages/llm/llm/src/content.ts b/vendor/deepseek-harness/packages/llm/llm/src/content.ts
+index 8ec0c14d35..0b8fd2893e 100644
+--- a/vendor/deepseek-harness/packages/llm/llm/src/content.ts
++++ b/vendor/deepseek-harness/packages/llm/llm/src/content.ts
+@@ -6,6 +6,7 @@ import type {
+   AttachmentStore, FileAttachmentRef, ImageAttachmentRef, ImageMediaType, RequestImageAttachment,
+ } from '@deepseek-ai/dsh-attachment'
+ import { assertNever } from '@deepseek-ai/dsh-util-values'
++import { extractTextFromImage } from './ocr.ts'
+ 
+ /** Execution-world path that model tools can use to read one normalized attachment. */
+ export interface ImageAttachmentAccess {
+@@ -303,6 +304,55 @@ export function projectImagesForTextModel(messages: readonly Message[]): readonl
+   })
+ }
+ 
++/**
++ * Project durable image history into OCR text for an exact text-only model.
++ *
++ * Unlike the legacy synchronous projection, this path never substitutes a
++ * silent placeholder. Missing image access, a missing OCR executable, corrupt
++ * input, timeout, and empty OCR output all reject the request with an
++ * actionable error. The original durable messages remain untouched.
++ */
++export async function projectImagesForTextModelWithOcr(
++  messages: readonly Message[],
++  resolvePath: ImageAttachmentAccessResolver,
++  signal?: AbortSignal,
++): Promise<readonly Message[]> {
++  if (!messages.some(message => contentHasImage(message.content))) return messages
++  const cache = new Map<string, Promise<string>>()
++  const project = async (blocks: readonly ContentBlock[]): Promise<ContentBlock[]> => {
++    const next: ContentBlock[] = []
++    for (const block of blocks) {
++      if (block.type === 'image') {
++        if (signal?.aborted === true) throw new Error('OCR canceled before image extraction')
++        const access = resolvePath(block.attachment)
++        if (access === undefined || access.readonlyPath.length === 0) {
++          throw new Error('OCR cannot access the normalized image path for this attachment')
++        }
++        const key = String(block.attachment.attachmentId)
++        let pending = cache.get(key)
++        if (pending === undefined) {
++          pending = extractTextFromImage(access.readonlyPath, signal === undefined ? {} : { signal })
++          cache.set(key, pending)
++        }
++        const text = await pending
++        next.push({ type: 'text', text: `[OCR text for ${block.attachment.name ?? 'attached image'}]\n${text}` })
++        continue
++      }
++      if (block.type === 'tool-result') {
++        next.push({ ...block, content: await project(block.content) })
++        continue
++      }
++      next.push(block)
++    }
++    return next
++  }
++
++  return Promise.all(messages.map(async (message) => {
++    const content = await project(message.content)
++    return { ...message, content }
++  }))
++}
++
+ /**
+  * Number of oldest image occurrences one request projection removes, in whole
+  * count and byte quanta, once a route budget is exceeded. The result depends
+diff --git a/vendor/deepseek-harness/packages/llm/llm/src/index.ts b/vendor/deepseek-harness/packages/llm/llm/src/index.ts
+index 6a3cc5de71..adb03209de 100644
+--- a/vendor/deepseek-harness/packages/llm/llm/src/index.ts
++++ b/vendor/deepseek-harness/packages/llm/llm/src/index.ts
+@@ -33,9 +33,9 @@ import { HarnessError, INVALID_CREDENTIAL_CODE } from './error.ts'
+ import { normalizeLlmFailure } from './adapter-failure.ts'
+ import { normalizeApiKey } from './api-key.ts'
+ import {
+-  contentHasFile, contentHasImage, fileHandleText, projectFilesToText, projectImagesForTextModel,
++  contentHasFile, contentHasImage, fileHandleText, projectFilesToText, projectImagesForTextModelWithOcr,
+ } from './content.ts'
+-import type { FileAttachmentRef } from '@deepseek-ai/dsh-attachment'
++import type { FileAttachmentRef, ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
+ 
+ export * from './attribution.ts'
+ export * from './brand.ts'
+@@ -43,6 +43,7 @@ export * from './error.ts'
+ export * from './api-key.ts'
+ export * from './types.ts'
+ export * from './content.ts'
++export * from './ocr.ts'
+ export * from './assistant-stream.ts'
+ export * from './message.ts'
+ export * from './retry-policy.ts'
+@@ -796,6 +797,14 @@ export class LlmRuntime extends TypertRemoteService {
+         'INVALID_MODEL_REASONING',
+       )
+     }
++    if (reasoning.control !== undefined
++      && reasoning.control !== 'effort'
++      && reasoning.control !== 'toggle') {
++      throw new LlmError(
++        `adapter returned invalid reasoning control for provider "${provider}" model "${model}"`,
++        'INVALID_MODEL_REASONING',
++      )
++    }
+     const seen = new Set<string>()
+     const efforts = reasoning.efforts.map((effort) => {
+       if (
+@@ -828,6 +837,7 @@ export class LlmRuntime extends TypertRemoteService {
+       ...info,
+       reasoning: {
+         efforts,
++        ...reasoning.control === undefined ? {} : { control: reasoning.control },
+         ...reasoning.defaultEffort === undefined ? {} : { defaultEffort: reasoning.defaultEffort },
+       },
+     }
+@@ -990,6 +1000,19 @@ export class LlmRuntime extends TypertRemoteService {
+     return fs?.processPathFromHostPath(hostPath)
+   }
+ 
++  /** Resolve a durable image into the read-only path visible to the LLM host. */
++  private imageReadPath(ref: ImageAttachmentRef): string | undefined {
++    let hostPath: string | undefined
++    try {
++      hostPath = this.ctx.get('attachments')?.imageHostPath(ref)
++    } catch {
++      return undefined
++    }
++    if (hostPath === undefined) return undefined
++    const fs = this.ctx.get('fs') as { processPathFromHostPath(hostPath: string): string | undefined } | undefined
++    return fs?.processPathFromHostPath(hostPath)
++  }
++
+   /**
+    * Final adapter boundary. Adapter selection, dispatch, iterator construction,
+    * and iteration failures become one terminal failure chunk. Middleware and
+@@ -1035,7 +1058,14 @@ export class LlmRuntime extends TypertRemoteService {
+       if (modelInfo.inputModalities !== undefined
+         && !modelInfo.inputModalities.includes('image')
+         && projectedMessages.some(message => contentHasImage(message.content))) {
+-        projectedMessages = projectImagesForTextModel(projectedMessages)
++        projectedMessages = await projectImagesForTextModelWithOcr(
++          projectedMessages,
++          ref => {
++            const readonlyPath = this.imageReadPath(ref)
++            return readonlyPath === undefined ? undefined : { readonlyPath }
++          },
++          resolvedOptions.signal,
++        )
+       }
+       const projectedOptions = projectedMessages === resolvedOptions.messages
+         ? resolvedOptions
+diff --git a/vendor/deepseek-harness/packages/llm/llm/tests/content.spec.ts b/vendor/deepseek-harness/packages/llm/llm/tests/content.spec.ts
+index af114958b1..7c63c2e07e 100644
+--- a/vendor/deepseek-harness/packages/llm/llm/tests/content.spec.ts
++++ b/vendor/deepseek-harness/packages/llm/llm/tests/content.spec.ts
+@@ -1,4 +1,7 @@
+ import { describe, expect, it } from 'vitest'
++import { mkdtemp, rm, writeFile } from 'node:fs/promises'
++import { tmpdir } from 'node:os'
++import { join } from 'node:path'
+ import { AttachmentId, ImageVariantId } from '@deepseek-ai/dsh-attachment'
+ import type { AttachmentStore, ImageMediaType } from '@deepseek-ai/dsh-attachment'
+ import {
+@@ -11,8 +14,10 @@ import {
+   offloadedImagePrefixCount,
+   offloadRequestImagesWithPolicy,
+   projectImagesForTextModel,
++  projectImagesForTextModelWithOcr,
+   resolveImageAttachmentAccess,
+   requestImageHandleText,
++  setOcrRunnerForTests,
+ } from '../src/index.ts'
+ import type { ContentBlock, Message } from '../src/index.ts'
+ 
+@@ -364,6 +369,59 @@ describe('projectImagesForTextModel', () => {
+   })
+ })
+ 
++describe('projectImagesForTextModelWithOcr', () => {
++  it('replaces direct and nested images with bounded OCR text and caches an attachment', async () => {
++    const dir = await mkdtemp(join(tmpdir(), 'dsh-content-ocr-'))
++    const path = join(dir, 'sample.png')
++    await writeFile(path, Buffer.from('fixture image bytes'))
++    let runs = 0
++    const restore = setOcrRunnerForTests(async () => {
++      runs++
++      return 'recognized text'
++    })
++    try {
++      const shared = image(3)
++      const messages = [createUserMessage({
++        content: [shared, {
++          type: 'tool-result',
++          toolCallId: ToolCallId('nested-ocr'),
++          content: [shared],
++        }],
++        source,
++      })]
++      const projected = await projectImagesForTextModelWithOcr(
++        messages,
++        () => ({ readonlyPath: path }),
++      )
++      expect(runs).toBe(1)
++      expect(projected[0]?.content).toEqual([
++        { type: 'text', text: '[OCR text for attached image]\nrecognized text' },
++        {
++          type: 'tool-result',
++          toolCallId: ToolCallId('nested-ocr'),
++          content: [{ type: 'text', text: '[OCR text for attached image]\nrecognized text' }],
++        },
++      ])
++      expect(messages[0]?.content[0]).toStrictEqual(shared)
++    } finally {
++      restore()
++      await rm(dir, { recursive: true, force: true })
++    }
++  })
++
++  it('fails explicitly when a durable normalized path is unavailable', async () => {
++    const restore = setOcrRunnerForTests(async () => 'unreachable')
++    try {
++      await expect(projectImagesForTextModelWithOcr(
++        [createUserMessage({ content: [image(1)], source })],
++        () => undefined,
++      )).rejects.toThrow('normalized image path')
++    } finally {
++      restore()
++    }
++  })
++})
++
+ describe('file projection', () => {
+   function fileBlock(name: string): Extract<ContentBlock, { type: 'file' }> {
+     return {
+diff --git a/vendor/deepseek-harness/packages/llm/llm/tests/service.spec.ts b/vendor/deepseek-harness/packages/llm/llm/tests/service.spec.ts
+index 2bfcd0f486..ccea7780fe 100644
+--- a/vendor/deepseek-harness/packages/llm/llm/tests/service.spec.ts
++++ b/vendor/deepseek-harness/packages/llm/llm/tests/service.spec.ts
+@@ -1,4 +1,7 @@
+ import { describe, expect, it } from 'vitest'
++import { mkdtemp, rm, writeFile } from 'node:fs/promises'
++import { tmpdir } from 'node:os'
++import { join } from 'node:path'
+ import { Context } from '@deepseek-ai/cordis'
+ import { AttachmentId } from '@deepseek-ai/dsh-attachment'
+ import LlmRuntime, {
+@@ -15,6 +18,7 @@ import LlmRuntime, {
+   StreamChunk,
+   createMessage,
+   createUserMessage,
++  setOcrRunnerForTests,
+ } from '@deepseek-ai/dsh-llm'
+ import type {
+   LlmModelContext,
+@@ -779,6 +783,7 @@ describe('LlmRuntime', () => {
+     [{ efforts: [{ id: 'valid', name: '' }] }, 'empty name'],
+     [{ efforts: [{ id: 'valid', name: 'Valid', description: 1 }] }, 'non-string description'],
+     [{ efforts: [{ id: 'same', name: 'One' }, { id: 'same', name: 'Two' }] }, 'duplicate id'],
++    [{ efforts: [{ id: 'valid', name: 'Valid' }], control: 'slider' }, 'invalid control'],
+     [{ efforts: [{ id: 'valid', name: 'Valid' }], defaultEffort: 'other' }, 'unknown default'],
+   ] as const)('rejects invalid model reasoning metadata (%s: %s)', async (metadata, _label) => {
+     const ctx = new Context()
+@@ -1018,8 +1023,14 @@ describe('LlmRuntime', () => {
+     expect(dispatched).toBe('first')
+   })
+ 
+-  it('projects historical images to stable text only after the loop-visible waterfall', async () => {
++  it('projects historical images through OCR only after the loop-visible waterfall', async () => {
++    const dir = await mkdtemp(join(tmpdir(), 'dsh-llm-ocr-'))
++    const imagePath = join(dir, 'image.png')
++    await writeFile(imagePath, Buffer.from('fixture image bytes'))
++    const restoreOcr = setOcrRunnerForTests(async () => 'recognized text')
+     const ctx = new Context()
++    ctx.provide('attachments', { imageHostPath: () => imagePath } as never)
++    ctx.provide('fs', { processPathFromHostPath: () => imagePath } as never)
+     await ctx.plugin(LlmRuntime)
+     const seen: GenerateOptions[] = []
+     const adapter = new class extends ScriptedAdapter {
+@@ -1046,32 +1057,37 @@ describe('LlmRuntime', () => {
+       yield * next()
+     })
+ 
+-    await collect(ctx.llm.stream({
+-      provider: 'route',
+-      model: 'text-only',
+-      messages: [createUserMessage({
+-        content: [{ type: 'image', attachment }],
+-        source: { kind: 'plugin', plugin: 'test' },
+-      })],
+-    }))
++    try {
++      await collect(ctx.llm.stream({
++        provider: 'route',
++        model: 'text-only',
++        messages: [createUserMessage({
++          content: [{ type: 'image', attachment }],
++          source: { kind: 'plugin', plugin: 'test' },
++        })],
++      }))
+ 
+-    expect(waterfall[0]?.messages[0]?.content).toEqual([{ type: 'image', attachment }])
+-    expect(seen[0]?.messages[0]?.content).toEqual([{
+-      type: 'text',
+-      text: '[image omitted because this model accepts text only; attachment sha256:aaaaaaaa]',
+-    }])
++      expect(waterfall[0]?.messages[0]?.content).toEqual([{ type: 'image', attachment }])
++      expect(seen[0]?.messages[0]?.content).toEqual([{
++        type: 'text',
++        text: '[OCR text for attached image]\nrecognized text',
++      }])
+ 
+-    const frozen = Object.freeze({
+-      provider: 'route',
+-      model: 'text-only',
+-      messages: [createUserMessage({
+-        content: [{ type: 'image', attachment }],
+-        source: { kind: 'plugin' as const, plugin: 'test' },
+-      })],
+-    })
+-    await collect(ctx.llm.stream(frozen))
+-    expect(Object.isFrozen(seen[1])).toBe(true)
+-    expect(Object.isFrozen(seen[1]?.messages)).toBe(true)
++      const frozen = Object.freeze({
++        provider: 'route',
++        model: 'text-only',
++        messages: [createUserMessage({
++          content: [{ type: 'image', attachment }],
++          source: { kind: 'plugin' as const, plugin: 'test' },
++        })],
++      })
++      await collect(ctx.llm.stream(frozen))
++      expect(Object.isFrozen(seen[1])).toBe(true)
++      expect(Object.isFrozen(seen[1]?.messages)).toBe(true)
++    } finally {
++      restoreOcr()
++      await rm(dir, { recursive: true, force: true })
++    }
+   })
+ 
+   it('passes cancellation through exact-model resolution', async () => {
+diff --git a/vendor/deepseek-harness/packages/llm/llm/src/ocr.ts b/vendor/deepseek-harness/packages/llm/llm/src/ocr.ts
+new file mode 100644
+index 0000000000..d5f608de77
+--- /dev/null
++++ b/vendor/deepseek-harness/packages/llm/llm/src/ocr.ts
+@@ -0,0 +1,231 @@
++/**
++ * Bounded, product-managed OCR fallback for text-only model routes.
++ *
++ * This module deliberately talks to the Tesseract executable through a tiny
++ * argv-only bridge. It does not import pytesseract, does not invoke a shell,
++ * never logs image contents, and keeps a small content-addressed memory cache.
++ * The desktop shell supplies FREECODE_TESSERACT_PATH/TESSDATA_PREFIX for the
++ * packaged Windows payload; a PATH-installed `tesseract` remains a useful
++ * development fallback.
++ */
++
++import { createHash } from 'node:crypto'
++import { existsSync, readFileSync, statSync } from 'node:fs'
++import { isAbsolute } from 'node:path'
++import { spawn } from 'node:child_process'
++
++export const OCR_MAX_IMAGE_BYTES = 25 * 1024 * 1024
++export const OCR_MAX_OUTPUT_BYTES = 256 * 1024
++export const OCR_TIMEOUT_MS = 30_000
++export const OCR_MAX_CACHE_ENTRIES = 64
++
++const LANGUAGE_PATTERN = /^[a-z]{3}(?:\+[a-z]{3})?$/u
++const DEFAULT_LANGUAGE = 'eng'
++const DEFAULT_PSM = 3
++
++export interface OcrImageOptions {
++  language?: string
++  psm?: number
++  timeoutMs?: number
++  maxOutputBytes?: number
++  /** Test/deployment override; production normally receives the env value. */
++  binaryPath?: string
++  signal?: AbortSignal
++}
++
++export interface OcrRunnerOptions {
++  maxOutputBytes: number
++  timeoutMs: number
++  signal?: AbortSignal
++}
++
++/** Injectable process boundary used by package tests and embedded runtimes. */
++export type OcrRunner = (
++  binary: string,
++  args: readonly string[],
++  options: OcrRunnerOptions,
++) => Promise<string>
++
++const cache = new Map<string, string>()
++
++function resolveBinary(override?: string): string {
++  const configured = override ?? process.env.FREECODE_TESSERACT_PATH
++  if (configured !== undefined && configured.trim().length > 0) {
++    const path = configured.trim()
++    if (isAbsolute(path) && !existsSync(path)) throw new Error(`OCR executable is missing: ${path}`)
++    return path
++  }
++  return process.platform === 'win32' ? 'tesseract.exe' : 'tesseract'
++}
++
++function resolveLanguage(language: string | undefined): string {
++  const value = language ?? process.env.FREECODE_OCR_LANGUAGE ?? DEFAULT_LANGUAGE
++  if (!LANGUAGE_PATTERN.test(value)) {
++    throw new Error('OCR language must use a bounded code such as eng, spa, or eng+spa')
++  }
++  return value
++}
++
++function resolvePsm(psm: number | undefined): number {
++  const value = psm ?? DEFAULT_PSM
++  if (!Number.isInteger(value) || value < 0 || value > 13) {
++    throw new Error('OCR page segmentation mode must be an integer from 0 through 13')
++  }
++  return value
++}
++
++function validateImagePath(imagePath: string): { size: number; digest: string } {
++  if (!isAbsolute(imagePath)) throw new Error('OCR requires an absolute normalized image path')
++  let stat: ReturnType<typeof statSync>
++  try {
++    stat = statSync(imagePath)
++  } catch {
++    throw new Error('OCR image is not readable')
++  }
++  if (!stat.isFile()) throw new Error('OCR image is not a regular file')
++  if (stat.size <= 0) throw new Error('OCR image is empty')
++  if (stat.size > OCR_MAX_IMAGE_BYTES) {
++    throw new Error(`OCR image exceeds the ${OCR_MAX_IMAGE_BYTES} byte safety limit`)
++  }
++  const digest = createHash('sha256').update(readFileSync(imagePath)).digest('hex')
++  return { size: stat.size, digest }
++}
++
++function cacheGet(key: string): string | undefined {
++  const value = cache.get(key)
++  if (value === undefined) return undefined
++  cache.delete(key)
++  cache.set(key, value)
++  return value
++}
++
++function cachePut(key: string, value: string): void {
++  cache.delete(key)
++  cache.set(key, value)
++  while (cache.size > OCR_MAX_CACHE_ENTRIES) {
++    const oldest = cache.keys().next().value as string | undefined
++    if (oldest === undefined) break
++    cache.delete(oldest)
++  }
++}
++
++/** Clear the process-local cache between tests or after an explicit setting change. */
++export function clearOcrCache(): void {
++  cache.clear()
++}
++
++async function spawnOcrProcess(
++  binary: string,
++  args: readonly string[],
++  options: OcrRunnerOptions,
++): Promise<string> {
++  const { maxOutputBytes, timeoutMs, signal } = options
++  return new Promise<string>((resolve, reject) => {
++    const child = spawn(binary, [...args], {
++      shell: false,
++      windowsHide: true,
++      stdio: ['ignore', 'pipe', 'pipe'],
++      ...process.env.FREECODE_TESSDATA_PREFIX === undefined ? {} : {
++        env: { ...process.env, TESSDATA_PREFIX: process.env.FREECODE_TESSDATA_PREFIX },
++      },
++    })
++    let output = Buffer.alloc(0)
++    let stderr = Buffer.alloc(0)
++    let settled = false
++    let timedOut = false
++    const abort = (): void => {
++      child.kill()
++      finish(new Error('OCR canceled before image extraction'))
++    }
++    const finish = (error?: Error): void => {
++      if (settled) return
++      settled = true
++      clearTimeout(timer)
++      signal?.removeEventListener('abort', abort)
++      if (error !== undefined) reject(error)
++      else {
++        const value = output.toString('utf8').trim()
++        if (value.length === 0) reject(new Error('OCR returned no text'))
++        else resolve(value)
++      }
++    }
++    const timer = setTimeout(() => {
++      timedOut = true
++      child.kill()
++      finish(new Error(`OCR timed out after ${timeoutMs}ms`))
++    }, timeoutMs)
++    timer.unref()
++    signal?.addEventListener('abort', abort, { once: true })
++    child.stdout?.on('data', (chunk: Buffer) => {
++      if (settled) return
++      output = Buffer.concat([output, chunk])
++      if (output.length > maxOutputBytes) {
++        child.kill()
++        finish(new Error(`OCR output exceeds the ${maxOutputBytes} byte safety limit`))
++      }
++    })
++    child.stderr?.on('data', (chunk: Buffer) => {
++      if (stderr.length < 4_096) stderr = Buffer.concat([stderr, chunk]).subarray(-4_096)
++    })
++    child.once('error', (error) => finish(new Error(`OCR process could not start: ${error.message}`)))
++    child.once('close', (code) => {
++      if (settled) return
++      if (timedOut) return
++      if (code !== 0) {
++        const detail = stderr.toString('utf8').trim().slice(0, 1_024)
++        finish(new Error(`OCR exited with code ${String(code)}${detail ? `: ${detail}` : ''}`))
++        return
++      }
++      finish()
++    })
++  })
++}
++
++let ocrRunner: OcrRunner = spawnOcrProcess
++
++/**
++ * Replace the executable boundary for an isolated package test and return a
++ * restore callback. Application code must use the packaged executable.
++ */
++export function setOcrRunnerForTests(runner: OcrRunner | undefined): () => void {
++  const previous = ocrRunner
++  ocrRunner = runner ?? spawnOcrProcess
++  return () => { ocrRunner = previous }
++}
++
++/** Run Tesseract for one already-resolved image and return bounded plain text. */
++export async function extractTextFromImage(
++  imagePath: string,
++  options: OcrImageOptions = {},
++): Promise<string> {
++  if (options.signal?.aborted === true) throw new Error('OCR canceled before image extraction')
++  const language = resolveLanguage(options.language)
++  const psm = resolvePsm(options.psm)
++  const maxOutputBytes = options.maxOutputBytes ?? OCR_MAX_OUTPUT_BYTES
++  if (!Number.isInteger(maxOutputBytes) || maxOutputBytes <= 0 || maxOutputBytes > OCR_MAX_OUTPUT_BYTES) {
++    throw new Error(`OCR output limit must be an integer from 1 through ${OCR_MAX_OUTPUT_BYTES}`)
++  }
++  const binary = resolveBinary(options.binaryPath)
++  const timeoutMs = options.timeoutMs ?? OCR_TIMEOUT_MS
++  if (!Number.isInteger(timeoutMs) || timeoutMs <= 0 || timeoutMs > OCR_TIMEOUT_MS) {
++    throw new Error(`OCR timeout must be an integer from 1 through ${OCR_TIMEOUT_MS}`)
++  }
++  const { digest } = validateImagePath(imagePath)
++  const key = `${binary}:${digest}:${language}:${psm}:${maxOutputBytes}`
++  const cached = cacheGet(key)
++  if (cached !== undefined) return cached
++
++  const text = await ocrRunner(
++    binary,
++    [imagePath, 'stdout', '--psm', String(psm), '-l', language],
++    { maxOutputBytes, timeoutMs, ...options.signal === undefined ? {} : { signal: options.signal } },
++  )
++  const normalized = text.trim()
++  if (normalized.length === 0) throw new Error('OCR returned no text')
++  if (Buffer.byteLength(normalized, 'utf8') > maxOutputBytes) {
++    throw new Error(`OCR output exceeds the ${maxOutputBytes} byte safety limit`)
++  }
++
++  cachePut(key, normalized)
++  return normalized
++}
+diff --git a/vendor/deepseek-harness/packages/llm/llm/tests/ocr.spec.ts b/vendor/deepseek-harness/packages/llm/llm/tests/ocr.spec.ts
+new file mode 100644
+index 0000000000..7dcb93d6cb
+--- /dev/null
++++ b/vendor/deepseek-harness/packages/llm/llm/tests/ocr.spec.ts
+@@ -0,0 +1,87 @@
++import { afterEach, beforeEach, describe, expect, it } from 'vitest'
++import { mkdtemp, rm, writeFile } from 'node:fs/promises'
++import { tmpdir } from 'node:os'
++import { join } from 'node:path'
++import {
++  OCR_MAX_OUTPUT_BYTES,
++  clearOcrCache,
++  extractTextFromImage,
++  setOcrRunnerForTests,
++} from '../src/index.ts'
++
++let dir: string
++
++beforeEach(async () => {
++  dir = await mkdtemp(join(tmpdir(), 'dsh-ocr-'))
++  clearOcrCache()
++})
++
++afterEach(async () => {
++  clearOcrCache()
++  await rm(dir, { recursive: true, force: true })
++})
++
++async function imagePath(): Promise<string> {
++  const path = join(dir, 'sample.png')
++  await writeFile(path, Buffer.from('fixture image bytes'))
++  return path
++}
++
++describe('OCR bridge contract', () => {
++  it('passes bounded argv to the runner, trims text, and caches by image/binary/options', async () => {
++    const image = await imagePath()
++    const calls: Array<{ binary: string; args: readonly string[] }> = []
++    const restore = setOcrRunnerForTests(async (binary, args) => {
++      calls.push({ binary, args })
++      return '  detected text\n'
++    })
++    try {
++      const first = await extractTextFromImage(image, { binaryPath: process.execPath, language: 'eng', psm: 6 })
++      const second = await extractTextFromImage(image, { binaryPath: process.execPath, language: 'eng', psm: 6 })
++      expect(first).toBe('detected text')
++      expect(second).toBe('detected text')
++      expect(calls).toHaveLength(1)
++      expect(calls[0]).toEqual({
++        binary: process.execPath,
++        args: [image, 'stdout', '--psm', '6', '-l', 'eng'],
++      })
++    } finally {
++      restore()
++    }
++  })
++
++  it('rejects unsafe paths, missing binaries, languages, modes, limits, and empty output', async () => {
++    const image = await imagePath()
++    const restore = setOcrRunnerForTests(async () => '')
++    try {
++      await expect(extractTextFromImage('relative.png', { binaryPath: process.execPath })).rejects.toThrow('absolute')
++      await expect(extractTextFromImage(image, { binaryPath: join(dir, 'missing.exe') })).rejects.toThrow('executable is missing')
++      await expect(extractTextFromImage(image, { binaryPath: process.execPath, language: 'en' })).rejects.toThrow('language')
++      await expect(extractTextFromImage(image, { binaryPath: process.execPath, psm: 14 })).rejects.toThrow('page segmentation')
++      await expect(extractTextFromImage(image, { binaryPath: process.execPath, maxOutputBytes: OCR_MAX_OUTPUT_BYTES + 1 })).rejects.toThrow('output limit')
++      await expect(extractTextFromImage(image, { binaryPath: process.execPath, timeoutMs: 0 })).rejects.toThrow('timeout')
++      await expect(extractTextFromImage(image, { binaryPath: process.execPath })).rejects.toThrow('returned no text')
++    } finally {
++      restore()
++    }
++  })
++
++  it('does not cache oversized or failed output and preserves timeout/cancellation diagnostics', async () => {
++    const image = await imagePath()
++    let mode: 'oversized' | 'timeout' | 'ok' = 'oversized'
++    const restore = setOcrRunnerForTests(async (_binary, _args, options) => {
++      if (mode === 'oversized') return 'x'.repeat(options.maxOutputBytes + 1)
++      if (mode === 'timeout') throw new Error(`OCR timed out after ${options.timeoutMs}ms`)
++      return 'ok'
++    })
++    try {
++      await expect(extractTextFromImage(image, { binaryPath: process.execPath, maxOutputBytes: 16 })).rejects.toThrow('exceeds')
++      mode = 'timeout'
++      await expect(extractTextFromImage(image, { binaryPath: process.execPath, timeoutMs: 20 })).rejects.toThrow('timed out')
++      mode = 'ok'
++      await expect(extractTextFromImage(image, { binaryPath: process.execPath })).resolves.toBe('ok')
++    } finally {
++      restore()
++    }
++  })
++})

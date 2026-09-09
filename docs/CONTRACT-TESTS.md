@@ -36,14 +36,14 @@ the equivalent local checks pass and the user explicitly authorizes the remote
 operation.
 
 The required preflight is `pnpm test`, `pnpm test:contract`, `pnpm typecheck`,
-the relevant build/package check for the changed surface, and
-`pnpm verify:linux-appimage` from Linux/WSL for the Linux artifact. The Windows
-release gate additionally upgrades an isolated install from the last-known-good
-`v0.4.3` artifact and invokes the Linux AppImage gate through WSL. The
-AppImage gate reads manifest, bridge, worker, tray, app-version, and update
-metadata entries directly from SquashFS; it does not trust WSL's convenience
-extraction output. A failing local preflight blocks publication; it is not a
-reason to use a remote workflow as a diagnostic run.
+and the relevant build/package check for the changed surface. The optional
+`pnpm verify:linux-appimage` command remains available from Linux/WSL for a
+contributor-built Linux artifact, but it is outside the Windows release gate.
+The Windows release gate installs the candidate into a clean isolated directory
+and validates the Windows runtime and installer behavior. It does not upgrade
+from `v0.4.3`; that version is only the last operational reference. A failing
+local preflight blocks publication; it is not a reason to use a remote workflow
+as a diagnostic run.
 
 The Windows NSIS smokes also inspect the actual Start Menu and Desktop `.lnk`
 files. Each link must target the installed executable and use the install
