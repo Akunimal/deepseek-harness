@@ -114,7 +114,49 @@ if (existsSync(payloadDsh)) {
 const serenaLauncher = join(STAGED_RUNTIME, 'serena-headless-launcher.py');
 logCheck('serena-launcher-exists', existsSync(serenaLauncher), serenaLauncher);
 
-// 6. Summary
+// 6. mcp-readiness.ts exists and exports McpCallRecord + McpReadinessTracker
+const mcpReadinessPath = join(REPO_ROOT, 'apps', 'shell', 'src', 'main', 'mcp-readiness.ts');
+const mcpReadiness = readFileSafe(mcpReadinessPath);
+if (mcpReadiness) {
+  const hasInterface = mcpReadiness.includes('export interface McpCallRecord') || mcpReadiness.includes('interface McpCallRecord');
+  const hasClass = mcpReadiness.includes('export class McpReadinessTracker') || mcpReadiness.includes('class McpReadinessTracker');
+  logCheck('mcp-readiness-exports', hasInterface && hasClass, hasInterface && hasClass ? 'McpCallRecord + McpReadinessTracker present' : `interface=${hasInterface} class=${hasClass}`);
+} else {
+  logCheck('mcp-readiness-readable', false, mcpReadinessPath);
+}
+
+// 7. caveman-resolver.ts exists and exports resolveCavemanBinary
+const cavemanResolverPath = join(REPO_ROOT, 'apps', 'shell', 'src', 'main', 'caveman-resolver.ts');
+const cavemanResolver = readFileSafe(cavemanResolverPath);
+if (cavemanResolver) {
+  const hasResolve = cavemanResolver.includes('export function resolveCavemanBinary') || cavemanResolver.includes('function resolveCavemanBinary');
+  logCheck('caveman-resolver-exports', hasResolve, hasResolve ? 'resolveCavemanBinary present' : 'missing');
+} else {
+  logCheck('caveman-resolver-readable', false, cavemanResolverPath);
+}
+
+// 8. mcp-home.ts BASE_SERVER_DEFINITIONS has no LSP entries
+if (mcpHome) {
+  const defsBlock = mcpHome.match(/const BASE_SERVER_DEFINITIONS\s*=\s*\[[\s\S]*?\n\] as const/)?.[0] ?? '';
+  const lspKeywords = /lsp|language.server|languageserver|gopls|rust-analyzer|pyright|typescript-language-server/i;
+  const hasLsp = lspKeywords.test(defsBlock);
+  logCheck('mcp-home-no-lsp-entries', !hasLsp, hasLsp ? 'FOUND LSP entries in BASE_SERVER_DEFINITIONS' : 'clean — no LSP entries');
+}
+
+// 9. runtime-deps.json rtk and caveman entries have notes indicating PATH-only resolution
+if (deps) {
+  const manifest = JSON.parse(deps);
+  const rtkEntry = manifest.dependencies.find(d => d.id === 'rtk');
+  const cavemanEntry = manifest.dependencies.find(d => d.id === 'caveman');
+  const rtkNotes = rtkEntry?.notes ?? '';
+  const cavemanNotes = cavemanEntry?.notes ?? '';
+  const rtkHasPath = /path.only|resolves?. from PATH/i.test(rtkNotes);
+  const cavemanHasPath = /path.only|resolves?. from PATH/i.test(cavemanNotes);
+  const allGood = rtkHasPath && cavemanHasPath && rtkEntry != null && cavemanEntry != null;
+  logCheck('runtime-deps-path-only-notes', allGood, allGood ? 'rtk and caveman both note PATH-only resolution' : `rtk=${rtkHasPath} caveman=${cavemanHasPath} rtk_present=${rtkEntry != null} caveman_present=${cavemanEntry != null}`);
+}
+
+// 10. Summary
 console.log();
 const allPass = checks.every(c => c.pass);
 const total = checks.length;

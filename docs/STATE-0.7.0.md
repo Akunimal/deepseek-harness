@@ -65,7 +65,7 @@ codex/0.7.0-remediation.
 | 3 | One hidden Win32 launch seam and event-level window trace | PLANNED | — | — | docs/evidence/0.7.0/phase-03 | No attributed helper window or bypass in stress traces. |
 | 4 | Supervisor generations, process trees and single-instance ownership | PLANNED | — | — | docs/evidence/0.7.0/phase-04 | Race/fault tests prove one Electron/DSH/pool owner. |
 | 5 | Git resolver and sandbox error contract | PLANNED | — | — | docs/evidence/0.7.0/phase-05 | Missing, denied, non-repo and valid Git cases classify correctly. |
-| 6 | MCP/Serena/free-search/Caveman/RTK readiness and UI status | PLANNED | — | — | docs/evidence/0.7.0/phase-06 | Offline real tools, project activation, toggles and tray/status pass. |
+| 6 | MCP/Serena/free-search/Caveman/RTK readiness and UI status | VERIFIED | 38d96ec3a4 | — | docs/evidence/0.7.0/phase-06 | Offline real tools, project activation, toggles and tray/status pass. |
 | 7 | Provider streams, tool-call continuation and OCR boundaries | PLANNED | — | — | docs/evidence/0.7.0/phase-07 | Truncated empty fixture cannot become success; OCR paths are bounded. |
 | 8 | Spanish and desktop capability/configuration contracts | PLANNED | — | — | docs/evidence/0.7.0/phase-08 | Locale, About, effort, config file, picker, updater and tray pass. |
 | 9 | NSIS/portable clean install and offline end-to-end smoke | PLANNED | — | — | docs/evidence/0.7.0/phase-09 | Both artifacts pass with controlled PATH/network and no helper windows. |
