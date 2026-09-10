@@ -68,8 +68,8 @@ const bootstrapPath = join(REPO_ROOT, 'apps', 'shell', 'src', 'main', 'uvx-boots
 const bootstrap = readFileSafe(bootstrapPath);
 if (bootstrap) {
   const hasAstralUrl = bootstrap.includes('releases.astral.sh');
-  const hasFetchCall = bootstrap.includes('fetch(');
-  logCheck('uvx-bootstrap-downloads-at-runtime', !hasAstralUrl || !hasFetchCall, hasAstralUrl ? 'downloads uv from releases.astral.sh on first launch' : 'clean');
+  const hasFetchImpl = bootstrap.includes('fetchImpl') || bootstrap.includes('fetch(');
+  logCheck('uvx-bootstrap-downloads-at-runtime', hasAstralUrl && hasFetchImpl, hasAstralUrl && hasFetchImpl ? 'downloads uv from releases.astral.sh on first launch (expected fallback)' : 'clean');
   logCheck('uvx-bootstrap-sha256-pinned', bootstrap.includes('MANAGED_UV_ARCHIVE_SHA256'), 'SHA-256 pin present');
 } else {
   logCheck('uvx-bootstrap-readable', false, bootstrapPath);

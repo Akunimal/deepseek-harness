@@ -43,7 +43,7 @@
           },
           "source": { "type": "string", "description": "Repository or origin (e.g. 'astral-sh/uv')" },
           "license": { "type": "string" },
-          "sha256": { "type": "string", "description": "SHA-256 hash; 'PLACEHOLDER' if pending" },
+          "sha256": { "type": "string", "description": "SHA-256 hash; 'PLACEHOLDER' if pending, 'N/A' if not applicable" },
           "path": {
             "type": "string",
             "description": "Relative path from payloadDir to the executable or entry point; 'PLACEHOLDER' if pending"

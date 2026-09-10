@@ -14,14 +14,15 @@ const PROCESS_CWD = '$process.cwd'
  * in development the scripts run from the repo tree.
  */
 function resolveVendoredMcpExe(subpath: string): string {
-  const { join } = require('node:path') as typeof import('node:path')
-  const { existsSync } = require('node:fs') as typeof import('node:fs')
-  // Packaged: resources/freecode/<subpath>
-  const packaged = join(__dirname, '..', '..', 'resources', 'freecode', subpath)
-  if (existsSync(packaged)) return packaged
-  // Dev: apps/shell/resources/freecode/<subpath>
-  const dev = join(__dirname, '..', '..', '..', 'resources', 'freecode', subpath)
-  if (existsSync(dev)) return dev
+  // Packaged: __dirname = resources/app.asar/dist/main/ → go up 3 to resources/
+  // Dev: __dirname = apps/shell/src/main/ → go up 2 to apps/shell/
+  const candidates = [
+    join(__dirname, '..', '..', '..', 'resources', 'freecode', subpath),
+    join(__dirname, '..', '..', 'resources', 'freecode', subpath),
+  ]
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) return candidate
+  }
   // Last resort: return the subpath as-is (will fail at spawn time with clear error)
   return subpath
 }

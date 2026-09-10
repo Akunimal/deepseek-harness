@@ -165,11 +165,16 @@ export async function ensureUvxCommand(options: UvxBootstrapOptions): Promise<st
   const env = options.env ?? process.env
   const pathLookup = options.pathLookup ?? firstPathExecutable
 
-  // 1. Check for vendored uv in the payload
-  const vendoredUvx = join(__dirname, '..', '..', 'resources', 'freecode', 'uv', 'uvx.exe')
-  if (existsSync(vendoredUvx)) {
-    options.log?.('info', 'using vendored uvx from payload', { path: vendoredUvx })
-    return vendoredUvx
+  // 1. Check for vendored uv in the payload (try multiple __dirname layouts)
+  const vendoredCandidates = [
+    join(__dirname, '..', '..', '..', 'resources', 'freecode', 'uv', 'uvx.exe'),
+    join(__dirname, '..', '..', 'resources', 'freecode', 'uv', 'uvx.exe'),
+  ]
+  for (const vendoredUvx of vendoredCandidates) {
+    if (existsSync(vendoredUvx)) {
+      options.log?.('info', 'using vendored uvx from payload', { path: vendoredUvx })
+      return vendoredUvx
+    }
   }
 
   // 2. Check user PATH

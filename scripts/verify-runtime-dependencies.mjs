@@ -153,7 +153,10 @@ if (hashMismatches.length > 0) {
   console.error(`  HASH MISMATCHES: ${hashMismatches.map(h => `${h.id} (expected ${h.expected.slice(0,12)}… got ${h.actual.slice(0,12)}…)`).join(', ')}`);
 }
 if (pathMisses.length > 0) {
-  console.error(`  PLACEHOLDER PATHS: ${pathMisses.join(', ')} — resolve before Phase 2 lock`);
+  const na = pathMisses.filter(id => manifest.dependencies.find(d => d.id === id)?.path === 'N/A')
+  const ph = pathMisses.filter(id => manifest.dependencies.find(d => d.id === id)?.path === 'PLACEHOLDER')
+  if (na.length > 0) console.error(`  OPTIONAL (N/A): ${na.join(', ')} — not bundled, PATH-only`)
+  if (ph.length > 0) console.error(`  PLACEHOLDER PATHS: ${ph.join(', ')} — resolve before lock`)
 }
 
 console.log(`\n  "result": "${allPass ? 'PASS' : 'FAIL'}"`);
