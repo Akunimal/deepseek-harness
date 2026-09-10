@@ -1,0 +1,154 @@
+{
+  "$schema": "./runtime-deps.schema.json",
+  "version": "1",
+  "upstream": {
+    "source": "deepseek-ai/deepseek-harness",
+    "version": "0.1.3-alpha.1",
+    "commit": "99f6f02fecdb7dff40c3fbc9470f5907c29f74ca"
+  },
+  "payloadDir": "resources/freecode",
+  "dependencies": [
+    {
+      "id": "opencode2api",
+      "name": "opencode2api",
+      "version": "0.1.3-alpha.1",
+      "arch": "win-x64",
+      "source": "freecode/opencode2api",
+      "license": "MIT",
+      "sha256": "PLACEHOLDER",
+      "path": "opencode2api/opencode2api-win-x64.exe",
+      "launch": {
+        "type": "exec",
+        "args": [],
+        "cwd": "$DSH_HOME"
+      },
+      "network": false,
+      "required": true
+    },
+    {
+      "id": "dsh-cli",
+      "name": "dsh CLI",
+      "version": "0.1.3-alpha.1",
+      "arch": "any",
+      "source": "deepseek-ai/deepseek-harness",
+      "license": "MIT",
+      "sha256": "PLACEHOLDER",
+      "path": "dsh/apps/cli/lib/bin.js",
+      "launch": {
+        "type": "node",
+        "args": [],
+        "cwd": "$DSH_HOME"
+      },
+      "network": false,
+      "required": true
+    },
+    {
+      "id": "tesseract",
+      "name": "Tesseract OCR",
+      "version": "5.4.0.20240606",
+      "arch": "win-x64",
+      "source": "UB-Mannheim/Tesseract-OCR",
+      "license": "Apache-2.0",
+      "sha256": "PLACEHOLDER",
+      "path": "tesseract/tesseract.exe",
+      "launch": {
+        "type": "exec",
+        "args": ["$INPUT", "stdout", "--psm", "$PSM", "-l", "$LANG"],
+        "cwd": "$TEMP"
+      },
+      "network": false,
+      "required": false,
+      "notes": "Optional OCR; resolves from bundled path first, then system PATH"
+    },
+    {
+      "id": "serena",
+      "name": "Serena MCP",
+      "version": "PLACEHOLDER",
+      "arch": "any",
+      "source": "oraios/serena",
+      "license": "MIT",
+      "sha256": "PLACEHOLDER",
+      "path": "PLACEHOLDER",
+      "launch": {
+        "type": "uvx",
+        "args": ["--from", "git+https://github.com/oraios/serena", "serena", "start-mcp-server", "--context", "claude-code"],
+        "cwd": "$process.cwd"
+      },
+      "network": true,
+      "required": false,
+      "notes": "Requires uvx bootstrap; offline closure deferred to Phase 2 MCP design"
+    },
+    {
+      "id": "free-search",
+      "name": "free-search MCP",
+      "version": "PLACEHOLDER",
+      "arch": "any",
+      "source": "PLACEHOLDER",
+      "license": "PLACEHOLDER",
+      "sha256": "PLACEHOLDER",
+      "path": "PLACEHOLDER",
+      "launch": {
+        "type": "uvx",
+        "args": ["free-search-mcp"],
+        "cwd": "$process.cwd"
+      },
+      "network": true,
+      "required": false,
+      "notes": "Requires uvx bootstrap; offline closure deferred to Phase 2 MCP design"
+    },
+    {
+      "id": "uv-managed",
+      "name": "uv (managed)",
+      "version": "0.12.10",
+      "arch": "win-x64",
+      "source": "astral-sh/uv",
+      "license": "MIT OR Apache-2.0",
+      "sha256": "f65744f94072152b1f86ba2aace4d01f1124d9a8ecb235805039e3718c36cac2",
+      "path": "PLACEHOLDER",
+      "launch": {
+        "type": "exec",
+        "args": ["tool", "run", "$TOOL"],
+        "cwd": "$process.cwd"
+      },
+      "network": true,
+      "required": false,
+      "notes": "Downloaded on first MCP launch if not on PATH; SHA-256 pinned in uvx-bootstrap.ts"
+    },
+    {
+      "id": "rtk",
+      "name": "RTK",
+      "version": "PLACEHOLDER",
+      "arch": "win-x64",
+      "source": "PLACEHOLDER",
+      "license": "PLACEHOLDER",
+      "sha256": "PLACEHOLDER",
+      "path": "PLACEHOLDER",
+      "launch": {
+        "type": "exec",
+        "args": ["$COMMAND"],
+        "cwd": "$CWD"
+      },
+      "network": false,
+      "required": false,
+      "notes": "Optional; resolves from PATH only; not in current payload; default ON in shell settings"
+    },
+    {
+      "id": "caveman",
+      "name": "Caveman",
+      "version": "PLACEHOLDER",
+      "arch": "win-x64",
+      "source": "JuliusBrussee/caveman",
+      "license": "PLACEHOLDER",
+      "sha256": "PLACEHOLDER",
+      "path": "PLACEHOLDER",
+      "launch": {
+        "type": "exec",
+        "args": ["$COMMAND"],
+        "cwd": "$CWD"
+      },
+      "network": false,
+      "required": false,
+      "notes": "Optional; resolves from PATH only; not in current payload; default ON in shell settings"
+    }
+  ]
+}

@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Runtime Dependency Manifest",
+  "description": "Schema for the Windows runtime dependency bundle. Every payload item must be declared here with its provenance, hash, and launch contract.",
+  "type": "object",
+  "required": ["version", "upstream", "payloadDir", "dependencies"],
+  "properties": {
+    "version": {
+      "type": "string",
+      "enum": ["1"],
+      "description": "Manifest schema version"
+    },
+    "upstream": {
+      "type": "object",
+      "required": ["source", "version", "commit"],
+      "properties": {
+        "source": { "type": "string" },
+        "version": { "type": "string" },
+        "commit": { "type": "string" }
+      }
+    },
+    "payloadDir": {
+      "type": "string",
+      "description": "Relative path from repo root to the payload directory"
+    },
+    "dependencies": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "version", "arch", "source", "license", "sha256", "path", "launch", "network", "required"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9-]+$",
+            "description": "Unique identifier (lowercase, hyphens only)"
+          },
+          "name": { "type": "string" },
+          "version": { "type": "string" },
+          "arch": {
+            "type": "string",
+            "enum": ["win-x64", "win-arm64", "linux-x64", "linux-arm64", "mac-x64", "mac-arm64", "any"],
+            "description": "Target architecture; 'any' for pure scripts/languages"
+          },
+          "source": { "type": "string", "description": "Repository or origin (e.g. 'astral-sh/uv')" },
+          "license": { "type": "string" },
+          "sha256": { "type": "string", "description": "SHA-256 hash; 'PLACEHOLDER' if pending" },
+          "path": {
+            "type": "string",
+            "description": "Relative path from payloadDir to the executable or entry point; 'PLACEHOLDER' if pending"
+          },
+          "launch": {
+            "type": "object",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["exec", "node", "uvx"],
+                "description": "Launch mechanism: exec = direct binary, node = Node.js script, uvx = Python via uv"
+              },
+              "args": {
+                "type": "array",
+                "items": { "type": "string" },
+                "description": "Default arguments; $VARIABLES are resolved at runtime"
+              },
+              "cwd": {
+                "type": "string",
+                "description": "Working directory; $VARIABLES resolved at runtime"
+              }
+            }
+          },
+          "network": {
+            "type": "boolean",
+            "description": "true if this dependency requires network access at runtime"
+          },
+          "required": {
+            "type": "boolean",
+            "description": "true if the app cannot function without this dependency"
+          },
+          "notes": { "type": "string" }
+        }
+      }
+    }
+  }
+}
