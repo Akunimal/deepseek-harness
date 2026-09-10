@@ -1,0 +1,169 @@
+{
+  "$schema": "./upstream-patches.schema.json",
+  "upstream": {
+    "remote": "upstream",
+    "ref": "main",
+    "prefix": "vendor/deepseek-harness",
+    "version": "0.1.3-alpha.1",
+    "syncCommit": "2e70569147"
+  },
+  "vendorPrefix": "vendor/deepseek-harness/",
+  "patches": [
+    {
+      "file": "010-freecode-dialog-bridge.patch",
+      "order": 10,
+      "owner": "freecode",
+      "description": "Electron dialog bridge for Win32 directory picker",
+      "seam": "packages/host/directory-picker-native",
+      "contractTests": ["packages/host/directory-picker-native/tests/native-picker.spec.ts"],
+      "vendorOnly": true
+    },
+    {
+      "file": "020-freecode-browser-tool.patch",
+      "order": 20,
+      "owner": "freecode",
+      "description": "Embedded browser tool bridge for desktop shell",
+      "seam": "packages/web/tool-web",
+      "contractTests": [],
+      "vendorOnly": true
+    },
+    {
+      "file": "030-freecode-shell-optimizers.patch",
+      "order": 30,
+      "owner": "freecode",
+      "description": "RTK and Caveman settings, wrappers and UI controls",
+      "seam": "packages/shell + packages/client/ui-settings-plugins",
+      "contractTests": [
+        "packages/shell/bash-local/tests/caveman.spec.ts",
+        "packages/shell/bash-local/tests/rtk.spec.ts",
+        "packages/shell/bash-local/tests/settings.spec.ts",
+        "packages/shell/pwsh-local/tests/settings.spec.ts",
+        "packages/client/ui-settings-plugins/tests/fields.client.spec.tsx",
+        "packages/client/ui-settings-plugins/tests/section.client.spec.tsx"
+      ],
+      "vendorOnly": true
+    },
+    {
+      "file": "040-freecode-branding.patch",
+      "order": 40,
+      "owner": "freecode",
+      "description": "Product identity as FreeCode",
+      "seam": "packages/client/ui-sidebar",
+      "contractTests": [],
+      "vendorOnly": true
+    },
+    {
+      "file": "050-cross-platform-tsdown-root.patch",
+      "order": 50,
+      "owner": "freecode",
+      "description": "Cross-platform client bundle resolution on Windows/Linux/WSL",
+      "seam": "packages/client",
+      "contractTests": [],
+      "vendorOnly": true
+    },
+    {
+      "file": "060-freecode-settings-and-mcp-ui.patch",
+      "order": 60,
+      "owner": "freecode",
+      "description": "Authenticated file-open bridge and Settings → Plugins → MCP tab",
+      "seam": "packages/client/ui-settings-plugins + packages/util/native-command",
+      "contractTests": [
+        "packages/client/ui-settings-plugins/tests/apply.client.spec.ts",
+        "packages/util/native-command/tests/path-opener.spec.ts"
+      ],
+      "vendorOnly": true
+    },
+    {
+      "file": "070-freecode-standard-mcp-preset.patch",
+      "order": 70,
+      "owner": "freecode",
+      "description": "Managed MCP rows in Standard agent preset",
+      "seam": "packages/preset/agent-presets/presets/standard",
+      "contractTests": [],
+      "vendorOnly": true
+    },
+    {
+      "file": "080-freecode-headless-persistent-terminal.patch",
+      "order": 80,
+      "owner": "freecode",
+      "description": "Persistent terminal execution behind upstream process seam",
+      "seam": "packages/subprocess/subprocess-local",
+      "contractTests": ["packages/subprocess/subprocess-local/tests/local.spec.ts"],
+      "vendorOnly": true
+    },
+    {
+      "file": "085-freecode-mcp-status-channel.patch",
+      "order": 85,
+      "owner": "freecode",
+      "description": "Bounded host-status channel for MCP readiness",
+      "seam": "packages/mcp/mcp-client/src/connection.ts",
+      "contractTests": [],
+      "vendorOnly": true
+    },
+    {
+      "file": "090-freecode-mcp-headless-diagnostics.patch",
+      "order": 90,
+      "owner": "freecode",
+      "description": "Bounded MCP stderr and structured connection diagnostics",
+      "seam": "packages/mcp/mcp-client/src/transport.ts",
+      "contractTests": [],
+      "vendorOnly": true
+    },
+    {
+      "file": "100-freecode-mcp-contracts-and-project-activation.patch",
+      "order": 100,
+      "owner": "freecode",
+      "description": "Workspace contract, tool schema validation, Serena activation serialization",
+      "seam": "packages/mcp/mcp-client",
+      "contractTests": [
+        "packages/mcp/mcp-client/tests/apply.spec.ts",
+        "packages/mcp/mcp-client/tests/mcp-client.spec.ts"
+      ],
+      "vendorOnly": true
+    },
+    {
+      "file": "110-freecode-mimo-thinking-toggle.patch",
+      "order": 110,
+      "owner": "freecode",
+      "description": "MiMo binary thinking contract separate from reasoning-effort",
+      "seam": "packages/api/session-controller + packages/llm/llm-pi-ai + packages/client/ui-model-selection",
+      "contractTests": [
+        "packages/client/ui-model-selection/tests/model-select.client.spec.tsx",
+        "packages/llm/llm-pi-ai/tests/adapter.spec.ts"
+      ],
+      "vendorOnly": true
+    },
+    {
+      "file": "120-freecode-ocr-fallback.patch",
+      "order": 120,
+      "owner": "freecode",
+      "description": "Bounded Tesseract fallback for text-only image paths",
+      "seam": "packages/fs/tool-fs + packages/llm/llm",
+      "contractTests": [
+        "packages/fs/tool-fs/tests/read-image.spec.ts",
+        "packages/llm/llm/tests/content.spec.ts",
+        "packages/llm/llm/tests/service.spec.ts",
+        "packages/llm/llm/tests/ocr.spec.ts"
+      ],
+      "vendorOnly": true
+    },
+    {
+      "file": "130-freecode-mcp-status-channel.patch",
+      "order": 130,
+      "owner": "freecode",
+      "description": "Degraded/failed MCP status events without coupling upstream client to Electron host",
+      "seam": "packages/mcp/mcp-client/src/connection.ts",
+      "contractTests": [],
+      "vendorOnly": true
+    },
+    {
+      "file": "140-freecode-spanish-locale.patch",
+      "order": 140,
+      "owner": "freecode",
+      "description": "Spanish desktop locale as modular upstream-replayable change",
+      "seam": "packages/client/locale",
+      "contractTests": [],
+      "vendorOnly": true
+    }
+  ]
+}

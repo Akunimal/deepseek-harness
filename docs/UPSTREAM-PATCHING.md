@@ -69,6 +69,10 @@ this recovery step.
   text-only image paths.
 - `130-freecode-mcp-status-channel.patch` adds degraded/failed status events
   without coupling the upstream client to the Electron host.
+- `140-freecode-spanish-locale.patch` adds Spanish (es) as a modular
+  upstream-replayable locale: LOCALE_IDS, es dictionary, settings dictionary,
+  metadata, and locale.register calls. The shell-side i18n (apps/shell) was
+  already complete; this patch closes the upstream web client gap.
 
 Only files under `vendor/deepseek-harness/` may be changed by this stack. The
 apply script accepts an already-applied stack, rejects partial/ambiguous
@@ -86,3 +90,19 @@ Do not edit the vendored files as the long-term source of a product feature.
 Update the corresponding patch, rerun the complete verification gates, and
 keep the upstream subtree itself free of FreeCode-only commits whenever the
 feature can be expressed as an overlay.
+
+## Patch manifest
+
+`patches/upstream/upstream-patches.json` is the machine-readable manifest.
+Every `.patch` file in `patches/upstream/` must be declared; undeclared files
+cause `apply-upstream-patches.mjs` to reject the stack. The manifest records
+order, owner, description, seam, contract tests, vendorOnly flag, and the
+upstream sync commit/version.
+
+Verification:
+
+    node scripts/verify-upstream-patch-stack.mjs
+
+This emits a JSON report covering manifest validity, order, vendor-only
+constraint, idempotency, replay, and whitespace. A non-zero exit means a
+check failed.

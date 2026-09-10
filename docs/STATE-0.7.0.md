@@ -28,7 +28,7 @@ BROKEN, UNVERIFIED or PLANNED.
 |---|---|---|
 | 0.4.3 startup | VERIFIED | Opens and remains the recovery reference only. It is not a source-of-truth or completeness guarantee. |
 | Published 0.6.0 install layout | VERIFIED | Historical clean NSIS install, shortcut and picker bridge smoke passed. It did not prove offline closure. |
-| Spanish desktop locale | BROKEN | Current catalog exposes zh/en after upstream synchronization; tests accepted the reduced list. |
+| Spanish desktop locale | BROKEN → patch ready | The 140-freecode-spanish-locale.patch adds es to the upstream web client. Shell-side i18n was already complete. Web client patch verified in Phase 1. Full LOCKED requires Phase 8 (packaged profile test). |
 | Gemini2API | LOCKED | Removed from active provider, selector, startup, resource and fallback paths. Keep absence tests. |
 | Independent LSP entries | OUT_OF_SCOPE | Serena is the semantic MCP surface; separate LSP rows must not return. |
 | Supervisor/worker lifecycle | BROKEN | Stale-event mitigation exists, but duplicate-window behavior was reproduced and stress evidence is incomplete. |
@@ -60,7 +60,7 @@ codex/0.7.0-remediation.
 | Phase | Scope | State | Commit | Push | Evidence | Lock condition |
 |---|---|---|---|---|---|---|
 | 0 | Documentation truth, baseline and stale-claim checks | VERIFIED | e67f020035 | origin/codex/0.7.0-remediation | docs/evidence/0.7.0/phase-00 | Current README/release docs agree and diff check is clean. |
-| 1 | Upstream refresh, ordered patch manifest and idempotent replay | PLANNED | — | — | docs/evidence/0.7.0/phase-01 | Clean refresh replays twice, vendor-only and fail-closed. |
+| 1 | Upstream refresh, ordered patch manifest and idempotent replay | VERIFIED | pending | pending | docs/evidence/0.7.0/phase-01 | Clean refresh replays twice, vendor-only and fail-closed. |
 | 2 | RTK, uv/servers and complete Windows runtime closure | PLANNED | — | — | docs/evidence/0.7.0/phase-02 | Empty PATH and blocked network still initialize/call required tools. |
 | 3 | One hidden Win32 launch seam and event-level window trace | PLANNED | — | — | docs/evidence/0.7.0/phase-03 | No attributed helper window or bypass in stress traces. |
 | 4 | Supervisor generations, process trees and single-instance ownership | PLANNED | — | — | docs/evidence/0.7.0/phase-04 | Race/fault tests prove one Electron/DSH/pool owner. |
