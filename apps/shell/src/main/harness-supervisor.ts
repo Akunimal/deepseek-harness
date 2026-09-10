@@ -83,6 +83,8 @@ export const DSH_WEB_ARGS = [
  * `shell: false` also prevents command strings from being routed through
  * cmd.exe, which would create an extra visible console in some environments.
  */
+export const HIDDEN_CHILD_PROCESS_OPTIONS = { windowsHide: true, shell: false } as const
+
 /**
  * Electron GUI processes do not own a durable console stream. On Windows the
  * stream can close while the child is still flushing data; writing to that

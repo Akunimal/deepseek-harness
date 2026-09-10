@@ -32,10 +32,9 @@ describe('embedded MCP catalog', () => {
     ])
     expect(config.servers).toHaveLength(2)
     expect(config.servers.every((server) => server.enabled)).toBe(true)
+    // When no uvxCommand/serenaLauncherPath is provided and the vendored
+    // serena.exe exists, args are the bare server args (no --from uvx prefix).
     expect(config.servers.find((server) => server.id === 'serena')?.args).toEqual([
-      '--from',
-      'git+https://github.com/oraios/serena',
-      'serena',
       'start-mcp-server',
       '--context',
       'claude-code',
@@ -78,20 +77,21 @@ describe('embedded MCP catalog', () => {
     })
   })
 
-  it('keeps the bootstrapped absolute uvx path when a toggle is changed', () => {
+  it('preserves the vendored executable path across toggles', () => {
     const home = mkdtempSync(join(tmpdir(), 'freecode-mcp-home-'))
     homes.push(home)
-    const uvxPath = join(home, 'uvx.exe')
-    writeFileSync(uvxPath, 'MZ managed uvx')
-
-    const first = ensureEmbeddedMcpConfig(home, { uvxCommand: uvxPath })
+    // When no uvxCommand/serenaLauncherPath is provided, the vendored
+    // free-search-mcp.exe path is used. A toggle should preserve it.
+    const first = ensureEmbeddedMcpConfig(home)
     const firstConfig = JSON.parse(readFileSync(first.configPath, 'utf8')) as { servers: Array<{ id: string, command: string }> }
-    expect(firstConfig.servers.find((server) => server.id === 'free-search')?.command).toBe(uvxPath)
+    // The command is the vendored path resolved by resolveVendoredMcpExe
+    const firstCmd = firstConfig.servers.find((server) => server.id === 'free-search')?.command
+    expect(firstCmd).toBeDefined()
 
     const second = setEmbeddedMcpEnabled(home, 'free-search', false)
     const secondConfig = JSON.parse(readFileSync(second.configPath, 'utf8')) as { servers: Array<{ id: string, command: string, enabled: boolean }> }
     const search = secondConfig.servers.find((server) => server.id === 'free-search')!
-    expect(search.command).toBe(uvxPath)
+    expect(search.command).toBe(firstCmd)
     expect(search.enabled).toBe(false)
   })
 
@@ -116,6 +116,7 @@ describe('embedded MCP catalog', () => {
       '--context',
       'claude-code',
     ])
-    expect(config.servers.find((server) => server.id === 'free-search')!.args).toEqual(['free-search-mcp'])
+    // With the vendored free-search-mcp.exe, args are empty (no uvx prefix).
+    expect(config.servers.find((server) => server.id === 'free-search')!.args).toEqual([])
   })
 })

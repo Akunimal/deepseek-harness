@@ -17,12 +17,6 @@ import { spawn, spawnSync, type ChildProcess, type SpawnOptions, type SpawnSyncO
 import { randomBytes } from 'node:crypto'
 import { existsSync } from 'node:fs'
 
-// ── Windows constants ────────────────────────────────────────────────
-const CREATE_NO_WINDOW = 0x08000000
-const STARTF_USESHOWWINDOW = 0x00000001
-const SW_HIDE = 0
-const PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
-
 // ── Launch metrics ───────────────────────────────────────────────────
 export interface LaunchMetrics {
   id: string

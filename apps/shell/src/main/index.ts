@@ -21,6 +21,11 @@ import { ensureUvxCommand } from './uvx-bootstrap.js';
 import { initLocale, setLocale as setNativeLocale, t } from './i18n.js';
 import { shouldNotifyBackendState, type BackendState } from './backend-state.js';
 import {
+  LifecycleManager,
+  acquireSingletonLock,
+  requestElectronSingleInstance,
+} from './lifecycle-manager.js';
+import {
   TorFleet,
   loadTorFleetState,
   saveTorFleetState,
@@ -184,6 +189,7 @@ let autoEnableTorHandler: (() => void) | null = null;
 const TOR_AUTOPROMPT_COOLDOWN_MS = 10 * 60 * 1_000;
 let torAutoPromptSuppressedUntil = 0;
 let shuttingDown = false;
+let lifecycleMgr: LifecycleManager | null = null;
 let refreshIntervalId: NodeJS.Timeout | null = null;
 let refreshRetryTimer: NodeJS.Timeout | null = null;
 const backendStates: Record<'catalog' | 'pool', BackendState> = { catalog: 'unknown', pool: 'unknown' };
@@ -909,9 +915,40 @@ const REFRESH_RETRY_DELAYS_MS = [5_000, 15_000, 30_000, 60_000, 120_000];
 
 app.whenReady().then(async () => {
   configurePortableDataDir();
+
+  // ── Phase 4: Singleton enforcement ──────────────────────────────
+  // File-based singleton lock catches stale locks from crashed instances
+  const userDataDir = app.getPath('userData');
+  const singletonResult = acquireSingletonLock(userDataDir);
+  if (!singletonResult.locked) {
+    app.quit();
+    return;
+  }
+
+  // Electron's built-in single-instance lock handles the race where two
+  // instances start simultaneously before either writes its lock file.
+  const isPrimary = requestElectronSingleInstance((_event, argv, _cwd) => {
+    // Second instance detected — focus the existing window and exit
+    appLogger?.logger.info({ argv }, 'second instance detected, focusing existing');
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      if (!mainWindow.isVisible()) mainWindow.show();
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+    }
+  });
+  if (!isPrimary) {
+    appLogger?.logger.warn({}, 'another FreeCode instance is already running, exiting');
+    app.quit();
+    return;
+  }
+
+  lifecycleMgr = new LifecycleManager({
+    userDataDir,
+    log: (level, msg, meta) => appLogger?.logger[level](meta ?? {}, msg),
+  });
+
   initLocale(app.getLocale());
   createSplashWindow();
-  const userDataDir = app.getPath('userData');
   if (app.isPackaged && !isPortable()) writeInstallMarker(userDataDir);
   checkStalePortable();
   appLogger = createAppLogger(join(userDataDir, 'logs'));
@@ -1215,24 +1252,32 @@ app.on('before-quit', async (e) => {
   if (shuttingDown) return; // re-entrancy guard: Electron may fire before-quit multiple times
   shuttingDown = true;
   e.preventDefault();
+
+  // Collect PIDs of managed processes for staged shutdown
+  const pids: number[] = [];
+  if (runtime?.supervisor.currentPid) pids.push(runtime.supervisor.currentPid);
+
   try {
-    // Clear all timers to prevent post-shutdown callbacks
-    if (updateTimer) { clearInterval(updateTimer); updateTimer = null; }
-    if (refreshRetryTimer) { clearTimeout(refreshRetryTimer); refreshRetryTimer = null; }
-    if (refreshIntervalId) { clearInterval(refreshIntervalId); refreshIntervalId = null; }
-    // Stop TorFleet once (guarded against double-stop)
-    if (torfleet) {
-      try { await torfleet.stop(); } catch { /* best effort */ }
-      torfleet = null;
-    }
-    await embeddedBrowser?.close();
-    embeddedBrowser = null;
-    await dialogBridge?.close();
-    dialogBridge = null;
-    await runtime?.stop();
-    await appLogger?.close();
+    await lifecycleMgr?.gracefulShutdown(pids, async () => {
+      // Clear all timers to prevent post-shutdown callbacks
+      if (updateTimer) { clearInterval(updateTimer); updateTimer = null; }
+      if (refreshRetryTimer) { clearTimeout(refreshRetryTimer); refreshRetryTimer = null; }
+      if (refreshIntervalId) { clearInterval(refreshIntervalId); refreshIntervalId = null; }
+      // Stop TorFleet once (guarded against double-stop)
+      if (torfleet) {
+        try { await torfleet.stop(); } catch { /* best effort */ }
+        torfleet = null;
+      }
+      await embeddedBrowser?.close();
+      embeddedBrowser = null;
+      await dialogBridge?.close();
+      dialogBridge = null;
+      await runtime?.stop();
+      await appLogger?.close();
+    });
   } catch (err) {
     console.error('[main] before-quit cleanup error:', err);
   }
+  lifecycleMgr?.destroy();
   app.exit(0);
 });
