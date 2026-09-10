@@ -1,4 +1,4 @@
-import { spawnSync } from 'node:child_process';
+import { launchHiddenSync } from './freecode-launcher'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
@@ -54,11 +54,11 @@ const CRED_PERSIST_LOCAL_MACHINE = 2;
 function pwshImpl(): SecretStore | null {
   if (process.platform !== 'win32') return null;
   // Probe: PowerShell must exist.
-  const probe = spawnSync('powershell.exe', ['-NoProfile', '-Command', '$PSVersionTable.PSVersion.Major'], {
+  const probe = launchHiddenSync({
+    executable: 'powershell.exe',
+    args: ['-NoProfile', '-Command', '$PSVersionTable.PSVersion.Major'],
     encoding: 'utf8',
     timeout: 10_000,
-    windowsHide: true,
-    shell: false,
   });
   if (probe.status !== 0) return null;
 
@@ -133,22 +133,22 @@ public static class FreecodeCred {
       const script = CALL(
         `[FreecodeCred]::Write('${esc(target)}', 'freecode', '${esc(value)}')`,
       );
-      const r = spawnSync('powershell.exe', ['-NoProfile', '-Command', script], {
+      const r = launchHiddenSync({
+        executable: 'powershell.exe',
+        args: ['-NoProfile', '-Command', script],
         encoding: 'utf8',
         timeout: 20_000,
-        windowsHide: true,
-        shell: false,
       });
       if (r.status !== 0) throw new Error(`setSecret failed: ${r.stderr || r.stdout}`);
     },
     async getSecret(key) {
       const target = TARGET_PREFIX + key;
       const script = CALL(`[FreecodeCred]::Read('${esc(target)}')`);
-      const r = spawnSync('powershell.exe', ['-NoProfile', '-Command', script], {
+      const r = launchHiddenSync({
+        executable: 'powershell.exe',
+        args: ['-NoProfile', '-Command', script],
         encoding: 'utf8',
         timeout: 20_000,
-        windowsHide: true,
-        shell: false,
       });
       if (r.status !== 0) return null;
       const out = r.stdout.trim();
@@ -157,11 +157,11 @@ public static class FreecodeCred {
     async deleteSecret(key) {
       const target = TARGET_PREFIX + key;
       const script = CALL(`[FreecodeCred]::Delete('${esc(target)}')`);
-      spawnSync('powershell.exe', ['-NoProfile', '-Command', script], {
+      launchHiddenSync({
+        executable: 'powershell.exe',
+        args: ['-NoProfile', '-Command', script],
         encoding: 'utf8',
         timeout: 20_000,
-        windowsHide: true,
-        shell: false,
       });
     },
   };

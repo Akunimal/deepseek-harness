@@ -1,0 +1,29 @@
+{
+  "timestamp": "2026-09-10T17:21:14.927Z",
+  "targetPid": "global",
+  "summary": {
+    "total": 3,
+    "passed": 2,
+    "failed": 0,
+    "warned": 0,
+    "skipped": 1
+  },
+  "checks": [
+    {
+      "check": "registry-console-keys",
+      "status": "PASS",
+      "count": 0,
+      "message": "0 console registry subkeys (normal)"
+    },
+    {
+      "check": "terminal-services",
+      "status": "SKIP",
+      "message": "handle.exe not available"
+    },
+    {
+      "check": "reporter-channel-files",
+      "status": "PASS",
+      "message": "No stale reporter channel files in TEMP"
+    }
+  ]
+}

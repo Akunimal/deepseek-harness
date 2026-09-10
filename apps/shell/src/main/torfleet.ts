@@ -1,4 +1,5 @@
-import { spawn, ChildProcess } from 'node:child_process';
+import { launchHidden, killProcessTree, type LaunchMetrics } from './freecode-launcher'
+import type { ChildProcess } from 'node:child_process'
 import { mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { createServer, createConnection, Server } from 'node:net';
@@ -107,7 +108,7 @@ export class TorFleet {
       if (inst.proc && inst.proc.exitCode === null) {
         try {
           if (process.platform === 'win32') {
-            spawn('taskkill', ['/T', '/F', '/PID', String(inst.pid)], { windowsHide: true, shell: false });
+            killProcessTree(inst.pid)
           } else {
             inst.proc.kill('SIGTERM');
           }
@@ -177,12 +178,15 @@ export class TorFleet {
 
     let proc: ChildProcess;
     try {
-      proc = spawn(this.cfg.torBinaryPath, ['-f', torrcPath], {
+      const { proc: launched } = launchHidden({
+        executable: this.cfg.torBinaryPath,
+        args: ['-f', torrcPath],
         cwd: instanceDir,
-        windowsHide: true,
-        shell: false,
         stdio: ['ignore', 'pipe', 'pipe'],
+        requestId: `tor-instance-${index}`,
+        closeReason: 'tor-exit',
       });
+      proc = launched;
     } catch (err) {
       console.error(`[torfleet] spawn tor-${index} failed:`, err);
       handle.status = 'stopped';
@@ -212,7 +216,7 @@ export class TorFleet {
       if (proc.exitCode === null) {
         try {
           if (process.platform === 'win32') {
-            spawn('taskkill', ['/T', '/F', '/PID', String(handle.pid)], { windowsHide: true, shell: false });
+            killProcessTree(handle.pid)
           } else {
             proc.kill('SIGTERM');
           }

@@ -5,7 +5,7 @@
  * fallback, but a release package must carry its own payload.
  */
 
-import { spawn } from 'node:child_process';
+import { launchHidden } from './freecode-launcher'
 import { existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -117,15 +117,17 @@ export async function extractText(
   const startTime = Date.now();
   try {
     const text = await new Promise<string>((resolve, reject) => {
-      const proc = spawn(binary, [
-        tmpFile,
-        'stdout',
-        '--psm', String(psm),
-        '-l', lang,
-      ], {
+      const { proc } = launchHidden({
+        executable: binary,
+        args: [
+          tmpFile,
+          'stdout',
+          '--psm', String(psm),
+          '-l', lang,
+        ],
         stdio: ['ignore', 'pipe', 'pipe'],
-        windowsHide: true,
-        shell: false,
+        requestId: 'ocr-tesseract',
+        closeReason: 'ocr-complete',
       });
 
       let stdoutBytes = 0;

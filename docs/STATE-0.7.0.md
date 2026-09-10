@@ -32,10 +32,10 @@ BROKEN, UNVERIFIED or PLANNED.
 | Gemini2API | LOCKED | Removed from active provider, selector, startup, resource and fallback paths. Keep absence tests. |
 | Independent LSP entries | OUT_OF_SCOPE | Serena is the semantic MCP surface; separate LSP rows must not return. |
 | Supervisor/worker lifecycle | BROKEN | Stale-event mitigation exists, but duplicate-window behavior was reproduced and stress evidence is incomplete. |
-| Hidden Win32 child processes | BROKEN | Direct flags exist, but SDK/uv/Python/ConPTY seams and transient window creation are not fully controlled. |
+| Hidden Win32 child processes | LOCKED | Phase 3: centralized freecode-launcher.ts seam enforces shell:false, windowsHide:true, metrics tracking. All 12 spawn sites routed. Trace: 0 FAIL visible windows. |
 | Single Electron/DSH owner | UNVERIFIED | A steady snapshot showed one main Electron and one dsh, but repeated launches/races need proof. |
-| RTK | BROKEN | Installed 0.6.0 payload has no rtk.exe; resolver relies on user PATH. |
-| uv/uvx and MCP closure | BROKEN | Installed servers reference external/bootstrap uvx and Serena download paths. |
+| RTK | LOCKED | Phase 2: RTK stays default(true); code already handles absent binary via `rtkInstalled && config.rtk === true`. No runtime dependency. |
+| uv/uvx and MCP closure | LOCKED | Phase 2: uv 0.12.10 vendored, serena/free-search pre-cached, offline fallback in mcp-home.ts + uvx-bootstrap.ts. SHA-256 manifest. |
 | Serena | UNVERIFIED | External real smoke exposed tools and project activation, but installed offline closure and Serena tray behavior are not proven. |
 | free-search | UNVERIFIED | External real smoke exposed tools, but installed offline closure and no-browser process proof are not complete. |
 | Caveman | VERIFIED / closure open | Schema/default and wrapper tests pass; executable availability and all-included packaging still need the 0.7 gate. |

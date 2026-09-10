@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { launchHiddenSync } from './freecode-launcher'
 import { tmpdir } from 'node:os';
 
 export interface HarnessUpdateInfo {
@@ -125,12 +125,10 @@ export async function installHarnessRuntime(
     const archive = Buffer.from(await response.arrayBuffer());
     verifyDigest(archive, info.digest);
     writeFileSync(archivePath, archive);
-    const extracted = spawnSync('tar', ['-xzf', archivePath, '-C', extractRoot], {
-      stdio: 'ignore',
-      // The updater is invoked from Electron; extraction must never flash a
-      // transient console window while an update is downloading/installing.
-      windowsHide: true,
-      shell: false,
+    const extracted = launchHiddenSync({
+      executable: 'tar',
+      args: ['-xzf', archivePath, '-C', extractRoot],
+      encoding: 'utf8',
     });
     if (extracted.status !== 0) throw new Error(`Could not extract harness runtime (exit ${extracted.status ?? 'unknown'})`);
 

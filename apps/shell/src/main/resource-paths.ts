@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { launchHiddenSync } from './freecode-launcher'
 
 export interface ResourcePathOptions {
   packaged: boolean;
@@ -54,10 +54,10 @@ export function resolveNodePath(options: NodePathOptions): string {
   if (options.explicit) return options.explicit;
   if (options.packaged) return options.executablePath ?? process.execPath;
   const platform = options.platform ?? process.platform;
-  const result = spawnSync(platform === 'win32' ? 'where' : 'which', ['node'], {
+  const result = launchHiddenSync({
+    executable: platform === 'win32' ? 'where' : 'which',
+    args: ['node'],
     encoding: 'utf8',
-    windowsHide: true,
-    shell: false,
   });
   const first = result.stdout.split(/\r?\n/)[0]?.trim();
   return first || 'node';

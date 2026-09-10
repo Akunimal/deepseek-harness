@@ -1,7 +1,7 @@
 import { app, BrowserWindow, Menu, Tray, WebContentsView, nativeImage, Notification, dialog } from 'electron';
 import { join, resolve } from 'node:path';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { spawn, spawnSync } from 'node:child_process';
+import { launchHidden, launchHiddenSync } from './freecode-launcher'
 import type { McpRuntimeStatus } from '@freecode/shared-types';
 import { createShellRuntime, ShellRuntime } from './runtime.js';
 import { DEFAULT_POOL_SIZE } from '@freecode/opencode-adapter';
@@ -602,11 +602,11 @@ function bundledUpstreamCommit(resources: string): string | undefined {
       // A clean source checkout may not have a generated runtime yet.
     }
   }
-  const result = spawnSync('git', ['log', '--all', '--format=%b', '--grep=git-subtree-dir: vendor/deepseek-harness'], {
+  const result = launchHiddenSync({
+    executable: 'git',
+    args: ['log', '--all', '--format=%b', '--grep=git-subtree-dir: vendor/deepseek-harness'],
     cwd: projectRoot(),
     encoding: 'utf8',
-    windowsHide: true,
-    shell: false,
   });
   const output = typeof result.stdout === 'string' ? result.stdout : '';
   const match = output.match(/git-subtree-split:\s*([0-9a-f]+)/i);
@@ -757,11 +757,13 @@ function runLocalUpstreamUpdate(): void {
     if (val !== undefined) safeEnv[key] = val;
   }
   safeEnv.CI = process.env.CI ?? 'true';
-  const child = spawn(node, [script], {
+  const { proc: child } = launchHidden({
+    executable: node,
+    args: [script],
     cwd: projectRoot(),
     env: safeEnv,
     stdio: 'ignore',
-    windowsHide: true,
+    closeReason: 'local-update-exit',
   });
   child.once('error', (error) => {
     localUpdateRunning = false;

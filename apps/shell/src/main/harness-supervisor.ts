@@ -1,4 +1,5 @@
-import { spawn, ChildProcess } from 'node:child_process';
+import { launchHidden, killProcessTree, type LaunchMetrics } from './freecode-launcher'
+import type { ChildProcess } from 'node:child_process'
 import { join } from 'node:path';
 import { mkdirSync } from 'node:fs';
 import type { McpRuntimeStatus } from '@freecode/shared-types';
@@ -82,11 +83,6 @@ export const DSH_WEB_ARGS = [
  * `shell: false` also prevents command strings from being routed through
  * cmd.exe, which would create an extra visible console in some environments.
  */
-export const HIDDEN_CHILD_PROCESS_OPTIONS = {
-  windowsHide: true,
-  shell: false,
-} as const;
-
 /**
  * Electron GUI processes do not own a durable console stream. On Windows the
  * stream can close while the child is still flushing data; writing to that
@@ -279,12 +275,17 @@ export class HarnessSupervisor {
     console.log(`[supervisor] spawn ${this.cfg.nodePath} ${this.cfg.cliEntry} ${dshArgs.join(' ')}`);
     let proc: ChildProcess;
     try {
-      proc = spawn(this.cfg.nodePath, [this.cfg.cliEntry, ...dshArgs], {
-        env,
+      const { proc: launched } = launchHidden({
+        executable: this.cfg.nodePath,
+        args: [this.cfg.cliEntry, ...dshArgs],
         cwd: this.cfg.homeDir,
-        ...HIDDEN_CHILD_PROCESS_OPTIONS,
-        stdio: ['ignore', 'pipe', 'pipe'],
+        env,
+        generation,
+        requestId: `dsh-gen-${generation}`,
+        closeReason: 'dsh-exit',
+        log: (level, msg, meta) => this.cfg.log?.(level, msg, meta),
       });
+      proc = launched;
     } catch (err) {
       console.error('[supervisor] spawn failed:', err);
       this.status = 'unhealthy';
@@ -493,24 +494,5 @@ function waitForExit(proc: ChildProcess, timeoutMs = STOP_GRACE_MS): Promise<voi
 }
 
 function killTree(pid: number): void {
-  try {
-    if (process.platform === 'win32') {
-      spawn('taskkill', ['/T', '/F', '/PID', String(pid)], { windowsHide: true, shell: false });
-    } else {
-      try {
-        process.kill(pid, 'SIGTERM');
-      } catch {
-        /* already dead */
-      }
-      setTimeout(() => {
-        try {
-          process.kill(pid, 'SIGKILL');
-        } catch {
-          /* already dead */
-        }
-      }, STOP_GRACE_MS).unref();
-    }
-  } catch {
-    /* best effort */
-  }
+  killProcessTree(pid)
 }

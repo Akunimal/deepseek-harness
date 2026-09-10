@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync, renameSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { spawnSync } from 'node:child_process'
+import { launchHiddenSync } from './freecode-launcher'
 
 /**
  * Product-managed uv bootstrap for Windows MCP servers.
@@ -39,10 +39,10 @@ function isWindowsExecutable(path: string): boolean {
 }
 
 function firstPathExecutable(name: string, env: NodeJS.ProcessEnv): string | undefined {
-  const result = spawnSync('where.exe', [name], {
+  const result = launchHiddenSync({
+    executable: 'where.exe',
+    args: [name],
     encoding: 'utf8',
-    windowsHide: true,
-    shell: false,
     env,
   })
   if (result.status !== 0 || result.error) return undefined
@@ -77,15 +77,19 @@ function extractZip(archivePath: string, destination: string): void {
     '$ErrorActionPreference = "Stop"',
     `Expand-Archive -LiteralPath ${powershellPathLiteral(archivePath)} -DestinationPath ${powershellPathLiteral(destination)} -Force`,
   ].join('; ')
-  const result = spawnSync('powershell.exe', [
-    '-NoLogo',
-    '-NoProfile',
-    '-NonInteractive',
-    '-ExecutionPolicy',
-    'Bypass',
-    '-Command',
-    script,
-  ], { encoding: 'utf8', windowsHide: true, shell: false })
+  const result = launchHiddenSync({
+    executable: 'powershell.exe',
+    args: [
+      '-NoLogo',
+      '-NoProfile',
+      '-NonInteractive',
+      '-ExecutionPolicy',
+      'Bypass',
+      '-Command',
+      script,
+    ],
+    encoding: 'utf8',
+  })
   if (result.error) throw result.error
   if (result.status !== 0) {
     throw new Error(`Expand-Archive failed: ${String(result.stderr || result.stdout).trim()}`)
