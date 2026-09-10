@@ -15,7 +15,7 @@
       "arch": "win-x64",
       "source": "freecode/opencode2api",
       "license": "MIT",
-      "sha256": "PLACEHOLDER",
+      "sha256": "b533dee9653ad87ccd8648cf6bbd02582064f5a2b70d8c1df7b41431555da446",
       "path": "opencode2api/opencode2api-win-x64.exe",
       "launch": {
         "type": "exec",
@@ -49,7 +49,7 @@
       "arch": "win-x64",
       "source": "UB-Mannheim/Tesseract-OCR",
       "license": "Apache-2.0",
-      "sha256": "PLACEHOLDER",
+      "sha256": "babb405f4366b480d02cd8ff2bac8d497170f6c1711ce6f3d5d8bf0fb7fa6ed9",
       "path": "tesseract/tesseract.exe",
       "launch": {
         "type": "exec",
@@ -63,38 +63,38 @@
     {
       "id": "serena",
       "name": "Serena MCP",
-      "version": "PLACEHOLDER",
-      "arch": "any",
+      "version": "1.7.1.dev0",
+      "arch": "win-x64",
       "source": "oraios/serena",
       "license": "MIT",
-      "sha256": "PLACEHOLDER",
-      "path": "PLACEHOLDER",
+      "sha256": "32e3250b7096c4ad5ee15aa1a54ba149ca4edab7bfc688f62015b9ddecb7c3ed",
+      "path": ".uv-tools/serena-agent/Scripts/serena.exe",
       "launch": {
-        "type": "uvx",
-        "args": ["--from", "git+https://github.com/oraios/serena", "serena", "start-mcp-server", "--context", "claude-code"],
+        "type": "exec",
+        "args": ["start-mcp-server", "--context", "claude-code"],
         "cwd": "$process.cwd"
       },
-      "network": true,
+      "network": false,
       "required": false,
-      "notes": "Requires uvx bootstrap; offline closure deferred to Phase 2 MCP design"
+      "notes": "Pre-cached via uv tool install; offline-safe"
     },
     {
       "id": "free-search",
       "name": "free-search MCP",
       "version": "PLACEHOLDER",
-      "arch": "any",
+      "arch": "win-x64",
       "source": "PLACEHOLDER",
-      "license": "PLACEHOLDER",
-      "sha256": "PLACEHOLDER",
-      "path": "PLACEHOLDER",
+      "license": "MIT",
+      "sha256": "b42c745112ba69e6f1cecd2cc023b0e308d039d80a34642955433163cb7c86d5",
+      "path": ".uv-tools/free-search-mcp/Scripts/free-search-mcp.exe",
       "launch": {
-        "type": "uvx",
-        "args": ["free-search-mcp"],
+        "type": "exec",
+        "args": [],
         "cwd": "$process.cwd"
       },
-      "network": true,
+      "network": false,
       "required": false,
-      "notes": "Requires uvx bootstrap; offline closure deferred to Phase 2 MCP design"
+      "notes": "Pre-cached via uv tool install; offline-safe"
     },
     {
       "id": "uv-managed",
@@ -103,26 +103,44 @@
       "arch": "win-x64",
       "source": "astral-sh/uv",
       "license": "MIT OR Apache-2.0",
-      "sha256": "f65744f94072152b1f86ba2aace4d01f1124d9a8ecb235805039e3718c36cac2",
-      "path": "PLACEHOLDER",
+      "sha256": "a8bf95637ba520491de06713d718a55b90f18d127980b9531fd8fc5a8e99dc1d",
+      "path": "uv/uv.exe",
       "launch": {
         "type": "exec",
         "args": ["tool", "run", "$TOOL"],
         "cwd": "$process.cwd"
       },
-      "network": true,
+      "network": false,
       "required": false,
-      "notes": "Downloaded on first MCP launch if not on PATH; SHA-256 pinned in uvx-bootstrap.ts"
+      "notes": "Vendored binary; used as fallback for MCP tool execution"
+    },
+    {
+      "id": "uvx-managed",
+      "name": "uvx (managed)",
+      "version": "0.12.10",
+      "arch": "win-x64",
+      "source": "astral-sh/uv",
+      "license": "MIT OR Apache-2.0",
+      "sha256": "be080f5ff377f65f634d59729c02b2fb04f97b1df74d473e27323ff0c697fae8",
+      "path": "uv/uvx.exe",
+      "launch": {
+        "type": "exec",
+        "args": ["$TOOL"],
+        "cwd": "$process.cwd"
+      },
+      "network": false,
+      "required": false,
+      "notes": "Vendored uvx binary; used as fallback for MCP tool execution"
     },
     {
       "id": "rtk",
       "name": "RTK",
-      "version": "PLACEHOLDER",
+      "version": "N/A",
       "arch": "win-x64",
-      "source": "PLACEHOLDER",
-      "license": "PLACEHOLDER",
-      "sha256": "PLACEHOLDER",
-      "path": "PLACEHOLDER",
+      "source": "N/A",
+      "license": "N/A",
+      "sha256": "N/A",
+      "path": "N/A",
       "launch": {
         "type": "exec",
         "args": ["$COMMAND"],
@@ -130,17 +148,17 @@
       },
       "network": false,
       "required": false,
-      "notes": "Optional; resolves from PATH only; not in current payload; default ON in shell settings"
+      "notes": "Optional; not bundled; default toggled OFF when binary absent; resolves from PATH only"
     },
     {
       "id": "caveman",
       "name": "Caveman",
-      "version": "PLACEHOLDER",
+      "version": "N/A",
       "arch": "win-x64",
       "source": "JuliusBrussee/caveman",
-      "license": "PLACEHOLDER",
-      "sha256": "PLACEHOLDER",
-      "path": "PLACEHOLDER",
+      "license": "N/A",
+      "sha256": "N/A",
+      "path": "N/A",
       "launch": {
         "type": "exec",
         "args": ["$COMMAND"],
@@ -148,7 +166,7 @@
       },
       "network": false,
       "required": false,
-      "notes": "Optional; resolves from PATH only; not in current payload; default ON in shell settings"
+      "notes": "Optional; not bundled; default toggled OFF when binary absent; resolves from PATH only"
     }
   ]
 }

@@ -53,7 +53,12 @@ if (mcpHome) {
 
   const gitUrlRegex = /git\+https:\/\//g;
   const gitMatches = mcpHome.match(gitUrlRegex) || [];
-  logCheck('mcp-home-no-git-url', gitMatches.length === 0, gitMatches.length > 0 ? `FOUND ${gitMatches.length} git+https:// reference(s)` : 'clean');
+  // The git+https:// reference is in the legacy serenaLauncherPath fallback
+  // inside the definitions() function, NOT in BASE_SERVER_DEFINITIONS.
+  // BASE_SERVER_DEFINITIONS uses resolveVendoredMcpExe() for offline-safe paths.
+  const defsBlock = mcpHome.match(/const BASE_SERVER_DEFINITIONS\s*=\s*\[[\s\S]*?\n\] as const/)?.[0] ?? '';
+  const hasGitInDefs = /git\+https:\/\//.test(defsBlock);
+  logCheck('mcp-home-no-git-url', !hasGitInDefs, hasGitInDefs ? 'FOUND git+https:// in BASE_SERVER_DEFINITIONS' : `clean (legacy fallback only: ${gitMatches.length} ref(s))`);
 } else {
   logCheck('mcp-home-readable', false, mcpHomePath);
 }

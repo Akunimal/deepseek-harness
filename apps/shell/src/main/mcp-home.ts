@@ -8,17 +8,35 @@ export const MCP_MANAGED_PATCH_END = '# END FREECODE MANAGED MCP'
 
 const PROCESS_CWD = '$process.cwd'
 
+/**
+ * Resolve the absolute path to a vendored MCP server executable.
+ * In packaged mode the payload sits under resources/freecode;
+ * in development the scripts run from the repo tree.
+ */
+function resolveVendoredMcpExe(subpath: string): string {
+  const { join } = require('node:path') as typeof import('node:path')
+  const { existsSync } = require('node:fs') as typeof import('node:fs')
+  // Packaged: resources/freecode/<subpath>
+  const packaged = join(__dirname, '..', '..', 'resources', 'freecode', subpath)
+  if (existsSync(packaged)) return packaged
+  // Dev: apps/shell/resources/freecode/<subpath>
+  const dev = join(__dirname, '..', '..', '..', 'resources', 'freecode', subpath)
+  if (existsSync(dev)) return dev
+  // Last resort: return the subpath as-is (will fail at spawn time with clear error)
+  return subpath
+}
+
 const BASE_SERVER_DEFINITIONS = [
   {
     id: 'serena',
     serverName: 'serena',
     transport: 'stdio',
-    command: 'uvx',
+    command: resolveVendoredMcpExe('.uv-tools/serena-agent/Scripts/serena.exe'),
     // Do not pass --project-from-cwd here. The Electron harness cwd is DSH_HOME,
     // not the user's workspace; Serena would walk up to a drive root and scan
     // the entire disk before it can register its MCP tools. The MCP bridge
     // activates the selected session workspace before each Serena call.
-    args: ['--from', 'git+https://github.com/oraios/serena', 'serena', 'start-mcp-server', '--context', 'claude-code'],
+    args: ['start-mcp-server', '--context', 'claude-code'],
     cwd: PROCESS_CWD,
     projectActivation: { toolName: 'activate_project', pathArgument: 'project' },
   },
@@ -26,8 +44,8 @@ const BASE_SERVER_DEFINITIONS = [
     id: 'free-search',
     serverName: 'free-search',
     transport: 'stdio',
-    command: 'uvx',
-    args: ['free-search-mcp'],
+    command: resolveVendoredMcpExe('.uv-tools/free-search-mcp/Scripts/free-search-mcp.exe'),
+    args: [],
     cwd: PROCESS_CWD,
   },
 ] as const
@@ -39,6 +57,8 @@ export interface EmbeddedMcpOptions {
   uvxCommand?: string
   /** Packaged Serena launcher that prevents SolidLSP's Windows shell hop. */
   serenaLauncherPath?: string
+  /** Override for the entire server catalog (e.g. vendored absolute paths). */
+  serverOverrides?: Record<string, { command: string, args?: readonly string[] }>
 }
 
 interface ManagedMcpServer {
@@ -65,21 +85,28 @@ export interface EmbeddedMcpState {
 
 function definitions(options: EmbeddedMcpOptions = {}): typeof BASE_SERVER_DEFINITIONS {
   return BASE_SERVER_DEFINITIONS.map((server) => {
+    // Apply server-level overrides (vendored absolute paths take precedence)
+    if (options.serverOverrides?.[server.id]) {
+      const override = options.serverOverrides[server.id]
+      return {
+        ...server,
+        command: override.command,
+        args: override.args ?? server.args,
+      }
+    }
+    // Legacy: serenaLauncherPath + uvxCommand fallback
     if (server.id === 'serena' && options.serenaLauncherPath !== undefined) {
       return {
         ...server,
         command: options.uvxCommand ?? server.command,
         args: [
-          '--from',
-          'git+https://github.com/oraios/serena',
-          'python',
-          options.serenaLauncherPath,
-          'start-mcp-server',
-          '--context',
-          'claude-code',
+          '--from', 'git+https://github.com/oraios/serena',
+          'python', options.serenaLauncherPath,
+          'start-mcp-server', '--context', 'claude-code',
         ],
       }
     }
+    // Legacy: uvx command replacement (for servers still using uvx)
     return server.command === 'uvx' && options.uvxCommand !== undefined
       ? { ...server, command: options.uvxCommand }
       : server
@@ -101,6 +128,10 @@ function persistedUvxCommand(raw: { servers?: unknown }): string | undefined {
     && typeof (server as { command?: unknown }).command === 'string'
   )) as { command?: string } | undefined
   const command = candidate?.command
+  // Vendored absolute path (serena.exe or free-search-mcp.exe) — no uvx needed
+  if (command !== undefined && existsSync(command) && !command.toLowerCase().endsWith('uvx.exe')) {
+    return undefined
+  }
   if (command === 'uvx') return undefined
   if (typeof command !== 'string' || !command.toLowerCase().endsWith('uvx.exe')) return undefined
   return existsSync(command) ? command : undefined

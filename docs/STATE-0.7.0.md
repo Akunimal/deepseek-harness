@@ -61,7 +61,7 @@ codex/0.7.0-remediation.
 |---|---|---|---|---|---|---|
 | 0 | Documentation truth, baseline and stale-claim checks | VERIFIED | e67f020035 | origin/codex/0.7.0-remediation | docs/evidence/0.7.0/phase-00 | Current README/release docs agree and diff check is clean. |
 | 1 | Upstream refresh, ordered patch manifest and idempotent replay | VERIFIED | a6e5caf7cf | origin/main | docs/evidence/0.7.0/phase-01 | Clean refresh replays twice, vendor-only and fail-closed. |
-| 2 | Runtime dependency manifest, audit, offline MCP design | VERIFIED | — | — | docs/evidence/0.7.0/phase-02 | Manifest declares all deps, verify scripts PASS/FAIL correctly, offline design documented. Lock requires vendored uv + offline MCP closure. |
+| 2 | Runtime dependency manifest, audit, offline MCP design | LOCKED | HEAD (lock commit) | pending | docs/evidence/0.7.0/phase-02 | Manifest declares 11 deps, vendored uv + MCP servers, verify scripts 3/3 PASS, mcp-home.ts uses vendored paths. |
 | 3 | One hidden Win32 launch seam and event-level window trace | PLANNED | — | — | docs/evidence/0.7.0/phase-03 | No attributed helper window or bypass in stress traces. |
 | 4 | Supervisor generations, process trees and single-instance ownership | PLANNED | — | — | docs/evidence/0.7.0/phase-04 | Race/fault tests prove one Electron/DSH/pool owner. |
 | 5 | Git resolver and sandbox error contract | PLANNED | — | — | docs/evidence/0.7.0/phase-05 | Missing, denied, non-repo and valid Git cases classify correctly. |

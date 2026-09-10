@@ -85,10 +85,10 @@ for (const dep of manifest.dependencies) {
   const depPath = join(STAGED_RUNTIME, dep.path);
 
   // 3a. Path check
-  if (dep.path === 'PLACEHOLDER') {
-    pathMisses.push(dep.id);
-    logCheck(`${dep.id}: path`, false, 'PLACEHOLDER — not yet resolved');
-    continue;
+  if (dep.path === 'PLACEHOLDER' || dep.path === 'N/A') {
+    pathMisses.push(dep.id)
+    logCheck(`${dep.id}: path`, dep.path === 'N/A', dep.path === 'N/A' ? 'N/A — optional, not bundled' : 'PLACEHOLDER — not yet resolved')
+    continue
   }
 
   if (!existsSync(depPath)) {

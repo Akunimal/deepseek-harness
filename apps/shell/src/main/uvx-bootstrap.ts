@@ -154,20 +154,32 @@ async function installManagedUvxAsync(userDataDir: string, fetchImpl: typeof fet
 }
 
 /**
- * Resolve an executable for the managed MCP catalog. User PATH wins; only a
- * missing uvx on Windows triggers the silent, per-user bootstrap.
+ * Resolve an executable for the managed MCP catalog. Priority order:
+ * 1. Vendored uv in resources/freecode/uv/ (offline-safe, no download)
+ * 2. User-installed uvx on PATH
+ * 3. Managed bootstrap download (last resort)
  */
 export async function ensureUvxCommand(options: UvxBootstrapOptions): Promise<string | undefined> {
   const platform = options.platform ?? process.platform
   if (platform !== 'win32') return undefined
   const env = options.env ?? process.env
   const pathLookup = options.pathLookup ?? firstPathExecutable
+
+  // 1. Check for vendored uv in the payload
+  const vendoredUvx = join(__dirname, '..', '..', 'resources', 'freecode', 'uv', 'uvx.exe')
+  if (existsSync(vendoredUvx)) {
+    options.log?.('info', 'using vendored uvx from payload', { path: vendoredUvx })
+    return vendoredUvx
+  }
+
+  // 2. Check user PATH
   const existing = pathLookup('uvx.exe', env) ?? pathLookup('uvx', env)
   if (existing) {
     options.log?.('info', 'using user-installed uvx', { path: existing })
     return existing
   }
 
+  // 3. Last resort: managed bootstrap download
   const fetchImpl = options.fetchImpl ?? fetch
   try {
     const managed = await installManagedUvxAsync(options.userDataDir, fetchImpl)
