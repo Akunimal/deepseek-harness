@@ -1,7 +1,7 @@
 # Known issues / Problemas conocidos
 
 Última revisión / Last reviewed: 2026-09-07
-Baseline revisada / Reviewed baseline: `v0.5.0`
+Baseline revisada / Reviewed baseline: `v0.6.0`
 
 ## Estado actual / Current status
 

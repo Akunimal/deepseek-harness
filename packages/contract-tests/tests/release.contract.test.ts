@@ -16,7 +16,7 @@ function releaseNotesFiles(): string[] {
 }
 
 describe('release and runtime packaging contracts', () => {
-  it('keeps releases manual and Windows-only for 0.5.0', () => {
+  it('keeps releases manual and Windows-only for 0.6.0', () => {
     const rootPackage = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')) as { version?: string };
     const shellPackageJson = JSON.parse(readFileSync(join(ROOT, 'apps/shell/package.json'), 'utf8')) as { version?: string };
     const shellPackage = readFileSync(join(ROOT, 'apps/shell/package.json'), 'utf8');
@@ -35,7 +35,7 @@ describe('release and runtime packaging contracts', () => {
     expect(releaseGate).toContain("run('all workspace typechecks', ['typecheck'])");
     expect(releaseGate).toContain("run('fresh NSIS install and installed-runtime smoke'");
     expect(releaseGate).not.toContain('0.4.3 to candidate upgrade');
-    expect(rootPackage.version).toBe('0.5.0');
+    expect(rootPackage.version).toBe('0.6.0');
     expect(shellPackageJson.version).toBe(rootPackage.version);
   });
 
@@ -93,7 +93,7 @@ describe('release and runtime packaging contracts', () => {
     expect(runtime).toContain('git-subtree-split');
     expect(runtime).toContain('materialize-runtime.mjs');
     expect(runtime).toContain('rebuild-runtime-native.mjs');
-    expect(runtime).toContain('0.5.0 is Windows-only');
+    expect(runtime).toContain('0.6.0 is Windows-only');
     expect(runtime).toContain('opencode2api-win-x64.exe');
     expect(runtime).not.toContain('opencode2api-linux-x64');
     expect(runtime).not.toContain('opencode2api-mac-x64');

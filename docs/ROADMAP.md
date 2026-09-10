@@ -1,7 +1,7 @@
 # Roadmap / Hoja de ruta
 
 Última revisión / Last reviewed: 2026-09-07
-Baseline: `v0.5.0`
+Baseline: `v0.6.0`
 Estado / Status: objetivos sujetos a validación; no son fechas ni promesas de release.
 
 FreeCode mantiene los workflows de publicación manuales para no consumir cuota gratuita de GitHub. Cada versión se publica sólo después de pasar sus contratos, pruebas relevantes y una revisión del instalador.
@@ -43,13 +43,13 @@ RTK and Caveman are not enabled together by default: they may complement each ot
 ### `v0.3.3` — Update UX follow-up / Seguimiento de experiencia de actualización
 
 Estado / Status: propuesta histórica, superseded by the implementation recorded
-in `v0.4.0` and hardened again in `v0.5.0`; it is not an outstanding release
+in `v0.4.0` and hardened again in `v0.6.0`; it is not an outstanding release
 task.
 
 Esta versión debe cerrar dos pendientes visibles del flujo de actualización:
 
 1. **Botón de actualizar alineado con Enviar / Update button matching Send**
-   - Historical proposal: the v0.5.0 implementation now uses the same 34px
+   - Historical proposal: the v0.6.0 implementation now uses the same 34px
      circular primary geometry, colors, hover state, and SVG path as the Send
      button, with the path rotated downward.
    - The accessible `Actualización disponible` / `Update available` label is
@@ -63,7 +63,7 @@ Esta versión debe cerrar dos pendientes visibles del flujo de actualización:
      contrato visual probado.
 
 2. **Aviso visible durante la instalación / Visible installation notice**
-   - v0.5.0 now emits a native notification before downloading and keeps the
+   - v0.6.0 now emits a native notification before downloading and keeps the
      tray tooltip/menu at `Descargando actualización…` / `Downloading update…`
      until the download promise settles; it changes to installing before the
      application restart.

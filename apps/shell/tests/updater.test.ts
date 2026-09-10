@@ -89,7 +89,7 @@ describe('update service', () => {
     const adapter = {
       autoDownload: false,
       autoInstallOnAppQuit: false,
-      checkForUpdates: vi.fn(async () => ({ updateInfo: { version: '0.5.0' } })),
+      checkForUpdates: vi.fn(async () => ({ updateInfo: { version: '0.6.0' } })),
       quitAndInstall: vi.fn(),
     } as UpdaterAdapter;
     const service = createUpdateService({ enabled: true, adapter });

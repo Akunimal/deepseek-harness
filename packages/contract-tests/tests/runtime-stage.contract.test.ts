@@ -67,7 +67,7 @@ function stageHasPlatform(platform: string): boolean {
 
 describe('runtime stage native binaries', () => {
   beforeAll(() => {
-    // Windows is the only 0.5.0 release target. A missing Windows stage is a
+    // Windows is the only 0.6.0 release target. A missing Windows stage is a
     // hard failure; Linux/macOS checks below are explicitly out of scope and
     // must not hide a missing release runtime.
     if (process.platform === 'win32') {

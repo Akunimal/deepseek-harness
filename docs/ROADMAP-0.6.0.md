@@ -1,9 +1,9 @@
-# FreeCode 0.5.0 definitive roadmap
+# FreeCode 0.6.0 definitive roadmap
 
 Last updated: 2026-09-09
 
 This is the execution order for the Windows-only anti-regression release. The
-ledger in [`STATE-0.5.0.md`](STATE-0.5.0.md) is the evidence source. A part is
+ledger in [`STATE-0.6.0.md`](STATE-0.6.0.md) is the evidence source. A part is
 not called complete because its code exists: it must pass its gate and then be
 marked `LOCKED` so later cleanup does not reopen verified behavior.
 
@@ -33,7 +33,7 @@ locked item.
 - Record the `0.4.3` reference and run existing tests before product edits.
 - Do not repair the installer or updater merely because they are present.
 
-Gate: baseline commands and evidence are recorded in `STATE-0.5.0.md`.
+Gate: baseline commands and evidence are recorded in `STATE-0.6.0.md`.
 
 ## Phase 1 — remove Gemini2API first
 
@@ -157,7 +157,7 @@ pnpm --filter @freecode/shell smoke:nsis
 pnpm release:gate
 ```
 
-No Linux/macOS build or AppImage verification is part of the official 0.5.0
+No Linux/macOS build or AppImage verification is part of the official 0.6.0
 gate. Local Linux artifacts may exist, but they remain unverified until tested
 on a real Linux system.
 
@@ -174,14 +174,14 @@ Only after all gates are green:
 1. mark verified components `LOCKED`;
 2. compile NSIS and portable Windows artifacts;
 3. run the clean-install smoke on the final files;
-4. create tag `0.5.0`;
+4. create tag `0.6.0`;
 5. create the release and upload only Windows binaries.
 
 ## Implementation closeout
 
 The implementation gates are now green on 2026-09-09:
 
-- `pnpm release:gate` exited 0 on the final 0.5.0 candidate;
+- `pnpm release:gate` exited 0 on the final 0.6.0 candidate;
 - the real MCP gate returned 24 Serena tools and 11 free-search tools, then
   observed both packaged tool namespaces in the provider request;
 - the runtime was rebuilt for Electron 35.7.5 / Node ABI 133, including the

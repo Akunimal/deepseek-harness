@@ -1,22 +1,22 @@
 # Estado de traspaso histórico — FreeCode DeepSeek Harness
 
-> La fuente vigente para la implementación Windows-only 0.5.0 es
-> [`docs/STATE-0.5.0.md`](docs/STATE-0.5.0.md) y su orden de ejecución es
-> [`docs/ROADMAP-0.5.0.md`](docs/ROADMAP-0.5.0.md). El historial debajo conserva
+> La fuente vigente para la implementación Windows-only 0.6.0 es
+> [`docs/STATE-0.6.0.md`](docs/STATE-0.6.0.md) y su orden de ejecución es
+> [`docs/ROADMAP-0.6.0.md`](docs/ROADMAP-0.6.0.md). El historial debajo conserva
 > evidencia de releases anteriores y no debe interpretarse como que Gemini2API,
-> LSP independientes o builds Linux/macOS forman parte de 0.5.0.
+> LSP independientes o builds Linux/macOS forman parte de 0.6.0.
 
-# v0.5.0 — 2026-09-09
+# v0.6.0 — 2026-09-09
 
 ## Estado actual de la release
 
-**Versión:** v0.5.0
+**Versión:** v0.6.0
 **Fecha:** 2026-09-06
 **Rama:** `main`
 
-### Registro histórico de la release (no es el estado final de 0.5.0)
+### Registro histórico de la release (no es el estado final de 0.6.0)
 
-La evidencia final está cerrada en `docs/STATE-0.5.0.md`: el `release:gate`
+La evidencia final está cerrada en `docs/STATE-0.6.0.md`: el `release:gate`
 Windows terminó con código 0, el runtime MCP real registró Serena y
 free-search, y el smoke de instalación NSIS limpia pasó. Las notas antiguas de
 esta sección conservan decisiones intermedias y no describen el payload final.

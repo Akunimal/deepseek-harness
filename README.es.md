@@ -8,9 +8,9 @@ servidores MCP y llamadas al modelo.
 
 ## Español
 
-## Alcance de 0.5.0
+## Alcance de 0.6.0
 
-0.5.0 es una release anti-regresiones para Windows x64. Publica únicamente:
+0.6.0 es una release anti-regresiones para Windows x64. Publica únicamente:
 
 - un instalador NSIS;
 - un ejecutable portable de Windows.
@@ -19,18 +19,18 @@ Linux y macOS quedan como targets manuales para contribuidores. Durante el
 desarrollo pudieron generarse binarios Linux localmente, pero no fueron
 probados en un Linux real porque el mantenedor usa Windows; necesitan testing
 en Linux antes de considerarse utilizables. No se sube ningún binario
-Linux/macOS como asset oficial de la release 0.5.0. Las compilaciones son
+Linux/macOS como asset oficial de la release 0.6.0. Las compilaciones son
 locales y no usan workflows de GitHub Actions.
 
 \`0.4.3\` es la última referencia operativa conocida porque abre bien. No es la
 fuente de verdad y puede no contener los fixes de este worktree. El gate de
-0.5.0 exige instalación limpia y apertura correcta; no exige actualizar una
+0.6.0 exige instalación limpia y apertura correcta; no exige actualizar una
 instalación existente desde 0.4.3.
 
 El candidato que falló al instalar no se publicó. El texto de recuperación de
 instalación incompleta menciona \`0.4.3\` como última estable, y el tag/release
 final se crea recién cuando todos los gates locales están verdes. Ver el
-[estado](docs/STATE-0.5.0.md) y el [roadmap](docs/ROADMAP-0.5.0.md).
+[estado](docs/STATE-0.6.0.md) y el [roadmap](docs/ROADMAP-0.6.0.md).
 
 ## Qué incluye
 
@@ -53,7 +53,7 @@ final se crea recién cuando todos los gates locales están verdes. Ver el
 - Versión real en About, botón de actualizar igual a Enviar con flecha hacia
   abajo y avisos de tray durante descarga/instalación.
 
-Gemini2API fue eliminado del runtime de 0.5.0. No queda proceso, provider,
+Gemini2API fue eliminado del runtime de 0.6.0. No queda proceso, provider,
 modelo del selector, recurso empaquetado ni fallback Gemini para configurar.
 También se eliminaron las entradas LSP independientes: Serena es la superficie
 semántica MCP.
@@ -165,7 +165,7 @@ distingue un fallo de permisos de uno de herramienta/MCP.
 ## Updater y versión
 
 About usa \`app.getVersion()\`, por lo que el binario empaquetado debe decir
-0.5.0. La app chequea updates al iniciar y cada seis horas. El control de
+0.6.0. La app chequea updates al iniciar y cada seis horas. El control de
 actualizar es exactamente el botón circular primario de Enviar, con la flecha
 apuntando hacia abajo. Al descargar, tooltip/menú de tray y notificación nativa
 lo informan; la instalación/reinicio también es visible. El gate solo comprueba
@@ -179,7 +179,7 @@ Después, eventos \`exit\` viejos del supervisor podían programar otro spawn
 mientras un restart explícito ya creaba el reemplazo. Además, readiness y
 registro de tools se confundían y los modelos text-only no tenían fallback OCR.
 
-El hardening de 0.5.0 cubre esas causas por separado:
+El hardening de 0.6.0 cubre esas causas por separado:
 
 - preflight y runtime manifest rechazan un bridge nativo incompleto;
 - supervisor y pool usan generaciones, rechazan eventos viejos y esperan el
@@ -237,7 +237,7 @@ Los artefactos quedan en \`apps/shell/release/\`.
 
 ## Builds manuales de otros sistemas
 
-Linux y macOS no son targets de release de 0.5.0. Un contribuidor puede
+Linux y macOS no son targets de release de 0.6.0. Un contribuidor puede
 trabajar en un host nativo con Node, pnpm, Git, herramientas de build de Electron
 y dependencias nativas del sistema:
 
@@ -277,7 +277,7 @@ release procedure in both languages.
 ## Índice de documentación
 
 - [Inventario de features upstream](docs/UPSTREAM-FEATURES.md)
-- [Estado de 0.5.0](docs/STATE-0.5.0.md)
-- [Roadmap de 0.5.0](docs/ROADMAP-0.5.0.md)
+- [Estado de 0.6.0](docs/STATE-0.6.0.md)
+- [Roadmap de 0.6.0](docs/ROADMAP-0.6.0.md)
 - [Roadmap histórico](docs/ROADMAP.md)
 - [Problemas conocidos](docs/KNOWN-ISSUES.md)

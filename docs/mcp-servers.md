@@ -20,7 +20,7 @@ marked FreeCode block; user-owned rows survive upgrades and toggles.
 
 Independent LSP MCP rows are intentionally not included. Serena provides the
 semantic project tools and avoids two competing language-server surfaces.
-Gemini2API and Gemini selector models are not part of 0.5.0.
+Gemini2API and Gemini selector models are not part of 0.6.0.
 
 ## Configuration and status
 

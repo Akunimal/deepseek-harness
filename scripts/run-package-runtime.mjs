@@ -1,7 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 
-// The 0.5.0 release is Windows-only. WSL is allowed as a build host, but the
+// The 0.6.0 release is Windows-only. WSL is allowed as a build host, but the
 // target must remain Win32 so native dependencies and the OCR payload cannot
 // silently switch to Linux.
 let bash = 'bash';
@@ -19,7 +19,7 @@ if (process.platform === 'win32') {
 const targetOs = process.env.DSH_TARGET_OS ?? 'win32';
 const targetCpu = process.env.DSH_TARGET_CPU ?? 'x64';
 if (targetOs !== 'win32') {
-  console.error(`run-package-runtime: unsupported target ${targetOs}; 0.5.0 is Windows-only.`);
+  console.error(`run-package-runtime: unsupported target ${targetOs}; 0.6.0 is Windows-only.`);
   process.exit(2);
 }
 

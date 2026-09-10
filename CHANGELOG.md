@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.5.0 — 2026-09-09
+## 0.6.0 — 2026-09-09
 
 ### Added / Agregado
 
@@ -55,7 +55,7 @@
   - worker pool: bounded respawn and stop/restart generation guards
   - `TorFleet onChange`: remove duplicate listener on toggle (memory leak fix)
 
-- **Failed-installer regression fixed** — The v0.5.0 candidate had lost the
+- **Failed-installer regression fixed** — The v0.6.0 candidate had lost the
   Electron dialog bridge from the Win32 `directory-picker-native` bundle.
   Preflight, source markers, bundle hashes and the clean installer layout smoke
   now reject a bridge-free or truncated runtime and point users to the last
@@ -87,7 +87,7 @@
   executable and Windows Harness runtime archive are built locally after the
   full test, contract, bundle, closure, real-MCP and fresh-install gates pass;
   no GitHub Actions release workflow is used. Linux/macOS are out of scope for
-  0.5.0.
+  0.6.0.
 
 - **Cross-platform contract hardening** — Linux versioned shared libraries such
   as `libvips-cpp.so.8.18.3` are now recognized by the native-runtime contract,

@@ -1,8 +1,8 @@
-# FreeCode 0.5.0 state ledger
+# FreeCode 0.6.0 state ledger
 
 Last updated: 2026-09-09, after `pnpm release:gate` exited 0.
 
-This is the persistent evidence ledger for the Windows-only 0.5.0
+This is the persistent evidence ledger for the Windows-only 0.6.0
 anti-regression release. `0.4.3` is the last operational reference because it
 opens successfully. It is not the source of truth for this worktree and does
 not certify that the current code is complete; it may lack fixes implemented
@@ -15,7 +15,7 @@ here.
 - `VERIFIED` — the focused contract or runtime check passes.
 - `LOCKED` — verified and frozen; change only after reproducing a new
   regression.
-- `OUT_OF_SCOPE` — intentionally excluded from the Windows 0.5.0 release.
+- `OUT_OF_SCOPE` — intentionally excluded from the Windows 0.6.0 release.
 
 ## Final ledger
 
@@ -27,21 +27,21 @@ test, latest verification and the reason that could unlock a locked result.
 **0.4.3 startup — `VERIFIED` (reference only)**
 
 - Symptom/scope: 0.4.3 opens and is the recovery reference; it is not a
-  compatibility or completeness guarantee for 0.5.0.
+  compatibility or completeness guarantee for 0.6.0.
 - Evidence: the release plan and recovery copy consistently identify 0.4.3 as
   the last stable operational version.
-- Affected files: `apps/shell/src/main/i18n.ts`, `docs/ROADMAP-0.5.0.md`,
+- Affected files: `apps/shell/src/main/i18n.ts`, `docs/ROADMAP-0.6.0.md`,
   `README.md`, `README.es.md`.
 - Test: recovery-copy assertions in the shell/contract suites.
 - Last verification: `pnpm release:gate`, 2026-09-09.
 - Unlock reason: none for the reference; a new 0.4.3 observation would not
-  change the 0.5.0 source of truth.
+  change the 0.6.0 source of truth.
 
 **About/version — `VERIFIED`**
 
 - Symptom/scope: About and manifests must report the candidate version, while
   incomplete-install errors must recommend v0.4.3.
-- Evidence: root and shell packages are `0.5.0`; About uses
+- Evidence: root and shell packages are `0.6.0`; About uses
   `app.getVersion()`; runtime manifest and release contracts agree.
 - Affected files: `package.json`, `apps/shell/package.json`,
   `apps/shell/src/main/index.ts`, `packages/contract-tests/tests/release.contract.test.ts`.
@@ -296,9 +296,9 @@ test, latest verification and the reason that could unlock a locked result.
 **Linux/macOS artifacts — `OUT_OF_SCOPE`**
 
 - Symptom/scope: prior release work spent time compiling non-Windows targets.
-- Evidence: 0.5.0 scripts fail closed for non-Windows targets; the release
+- Evidence: 0.6.0 scripts fail closed for non-Windows targets; the release
   gate publishes only Windows x64 NSIS/portable artifacts. Old 0.4.x files in
-  the local release directory are historical leftovers and are not 0.5.0
+  the local release directory are historical leftovers and are not 0.6.0
   assets.
 - Affected files: runtime/package scripts, builder config, release docs.
 - Test: Windows-only release gate and builder artifact inspection.
@@ -323,14 +323,14 @@ test, latest verification and the reason that could unlock a locked result.
 
 Final Windows artifacts are under `apps/shell/release/`:
 
-- `FreeCode-DeepSeek-Harness-0.5.0-win-x64-setup.exe`
-- `FreeCode-DeepSeek-Harness-0.5.0-win-x64-portable.exe`
-- `FreeCode-DeepSeek-Harness-0.5.0-win-x64-setup.exe.blockmap`
+- `FreeCode-DeepSeek-Harness-0.6.0-win-x64-setup.exe`
+- `FreeCode-DeepSeek-Harness-0.6.0-win-x64-portable.exe`
+- `FreeCode-DeepSeek-Harness-0.6.0-win-x64-setup.exe.blockmap`
 - the matching Windows runtime archive and `.sha256` checksum.
 
-Linux/macOS are outside the official 0.5.0 evidence. Local Linux artifacts may
+Linux/macOS are outside the official 0.6.0 evidence. Local Linux artifacts may
 exist from previous or development builds, but they were not tested on a real
 Linux host by the Windows maintainer and require separate Linux testing. None
 were uploaded. No GitHub Actions workflow was used. A tag/release is permitted only from the reviewed final
 commit containing this ledger update; do not treat the old 0.4.3 binaries or
-the previously deleted 0.5.0 candidate as release evidence.
+the previously deleted 0.6.0 candidate as release evidence.

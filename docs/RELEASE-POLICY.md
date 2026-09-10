@@ -19,7 +19,7 @@ Manual release checklist:
    verifies vendored bundle freshness and runtime closure, performs real
    Serena/free-search initialize/tools/list/tool calls, and exercises the
    isolated fresh-install smoke. An upgrade from `v0.4.3` is deliberately not
-   a 0.5.0 gate. A skipped, observational, or manually bypassed check is not a
+   a 0.6.0 gate. A skipped, observational, or manually bypassed check is not a
    release result.
 2. Review the generated Windows installers, portable executable, runtime
    archive, checksums, and update metadata locally.

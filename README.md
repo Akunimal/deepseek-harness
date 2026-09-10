@@ -8,9 +8,9 @@ calls.
 
 ## English
 
-## 0.5.0 scope
+## 0.6.0 scope
 
-0.5.0 is a Windows x64 anti-regression release. It publishes only:
+0.6.0 is a Windows x64 anti-regression release. It publishes only:
 
 - an NSIS installer;
 - a portable Windows executable.
@@ -18,18 +18,18 @@ calls.
 Linux and macOS are contributor-only manual targets. Linux binaries may have
 been generated locally during development, but they were not tested on a real
 Linux machine by the maintainer and require Linux testing before being treated
-as usable. No Linux/macOS artifact is uploaded as an official 0.5.0 release
+as usable. No Linux/macOS artifact is uploaded as an official 0.6.0 release
 asset. Builds are local and do not use GitHub Actions workflows.
 
 `0.4.3` is the last known-good operational reference because it opens. It is
 not the source of truth and may not contain the fixes in this worktree. The
-0.5.0 gate requires a clean install and launch; it does not require upgrading
+0.6.0 gate requires a clean install and launch; it does not require upgrading
 an existing 0.4.3 installation.
 
 The candidate that previously failed installation was not released. The
 installer failure recovery text names `0.4.3` as the last stable version, and
 the final tag/release is created only after every local gate is green. See the
-[state ledger](docs/STATE-0.5.0.md) and [roadmap](docs/ROADMAP-0.5.0.md).
+[state ledger](docs/STATE-0.6.0.md) and [roadmap](docs/ROADMAP-0.6.0.md).
 
 ## What is included
 
@@ -52,7 +52,7 @@ the final tag/release is created only after every local gate is green. See the
 - About/version from the packaged app version, an update button shaped like
   Send with a downward arrow, and tray notifications during downloads/install.
 
-Gemini2API was removed from the 0.5.0 runtime. There is no Gemini process,
+Gemini2API was removed from the 0.6.0 runtime. There is no Gemini process,
 provider, selector model, resource payload or fallback route to configure.
 Independent LSP MCP entries were also removed; Serena is the semantic MCP
 surface.
@@ -164,11 +164,11 @@ distinguishes permission failures from tool/MCP failures.
 
 ## Updater and versioning
 
-About reads `app.getVersion()`, so the packaged 0.5.0 binary must say 0.5.0.
+About reads `app.getVersion()`, so the packaged 0.6.0 binary must say 0.6.0.
 The app checks for updates at startup and every six hours. The update control
 is the same circular primary button as Send, with the arrow pointing down.
 When downloading, the tray tooltip/menu and a native notification say so; the
-install/restart phase is also visible. The 0.5.0 gate checks that this path does
+install/restart phase is also visible. The 0.6.0 gate checks that this path does
 not break startup, but does not require an upgrade from 0.4.3.
 
 ## Root cause of the previous regressions
@@ -180,7 +180,7 @@ explicit restart was already creating a replacement. Tool failures were hard
 to diagnose because readiness and successful registration were conflated, and
 text-only image paths had no OCR fallback.
 
-The 0.5.0 hardening addresses these independently:
+The 0.6.0 hardening addresses these independently:
 
 - preflight and runtime-manifest checks reject an incomplete native bridge;
 - supervisor and pool generations reject stale events and await process-tree
@@ -236,7 +236,7 @@ Expected artifacts are under `apps/shell/release/`.
 
 ## Manual contributor builds for other operating systems
 
-Linux and macOS are not release targets for 0.5.0. A contributor may work on a
+Linux and macOS are not release targets for 0.6.0. A contributor may work on a
 native host with its own Node, pnpm, Git, Electron build tools and native
 dependencies:
 
@@ -276,7 +276,7 @@ hardening y release local en ambos idiomas.
 ## Documentation index
 
 - [Upstream feature inventory](docs/UPSTREAM-FEATURES.md)
-- [0.5.0 state ledger](docs/STATE-0.5.0.md)
-- [0.5.0 roadmap](docs/ROADMAP-0.5.0.md)
+- [0.6.0 state ledger](docs/STATE-0.6.0.md)
+- [0.6.0 roadmap](docs/ROADMAP-0.6.0.md)
 - [Historical roadmap](docs/ROADMAP.md)
 - [Known issues](docs/KNOWN-ISSUES.md)

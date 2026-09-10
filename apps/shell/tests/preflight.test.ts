@@ -82,7 +82,7 @@ describe('verifyHarnessLayout', () => {
 
   it('rejects a runtime manifest without the CLI contract', () => {
     makeFullLayout(root);
-    writeFileSync(join(root, 'runtime-manifest.json'), '{"version":"0.5.0"}');
+    writeFileSync(join(root, 'runtime-manifest.json'), '{"version":"0.6.0"}');
     const result = verifyHarnessLayout({ resourcesDir: root, platform: 'win32' });
     expect(result.ok).toBe(false);
     expect(result.warnings.some(w => w.includes('valid cli'))).toBe(true);

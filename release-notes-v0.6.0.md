@@ -1,14 +1,14 @@
-# FreeCode DeepSeek Harness v0.5.0
+# FreeCode DeepSeek Harness v0.6.0
 
 ## English
 
 ### Windows-only anti-regression release
 
-0.5.0 officially publishes only Windows x64 NSIS and portable artifacts. Linux
+0.6.0 officially publishes only Windows x64 NSIS and portable artifacts. Linux
 and macOS remain contributor-only manual targets. Linux binaries may have been
 generated locally during development, but they were not tested on a real Linux
 system by the maintainer and require Linux testing before being considered
-usable. No Linux/macOS binary is uploaded as an official 0.5.0 release asset.
+usable. No Linux/macOS binary is uploaded as an official 0.6.0 release asset.
 The release gate requires a clean install and launch
 and deliberately does not require upgrading an existing 0.4.3 installation.
 `0.4.3` remains the last known-good recovery reference because it opens, but it
@@ -60,15 +60,15 @@ enumeration, uninstall and cleanup.
 
 Assets built locally and ready for the manual Windows release upload:
 
-- `FreeCode-DeepSeek-Harness-0.5.0-win-x64-setup.exe` — 344,948,290 bytes —
-  SHA-256 `3d192aca0eb6e7fdd51b9d4ffec9d0754617eef333bcbcb594fc5dc02c56a4c`
-- `FreeCode-DeepSeek-Harness-0.5.0-win-x64-portable.exe` — 344,785,805 bytes —
-  SHA-256 `971b4b0fd128665e677f6acc2429355b1372fe4a6e3e2cf8edfbfa57fc800d2`
-- `FreeCode-DeepSeek-Harness-0.5.0-win-x64-setup.exe.blockmap` — 354,648 bytes —
-  SHA-256 `277d7cce6afec98b38cf0901bd8dde57d551b3d74522f779d38055895a6343aa`
-- `deepseek-harness-runtime-0.1.3-alpha.1-win32-x64.tar.gz` — 217,707,191
+- `FreeCode-DeepSeek-Harness-0.6.0-win-x64-setup.exe` — 344,947,704 bytes —
+  SHA-256 `b1007cc1e3acc2d8a992d1196aff0787f2823e12bc8676d9b08ef7a2acc6758a`
+- `FreeCode-DeepSeek-Harness-0.6.0-win-x64-portable.exe` — 344,785,217 bytes —
+  SHA-256 `a1bc784b0c729a39c81f9bddb6525a4b86e6917c935a07d9e76541234429c98a`
+- `FreeCode-DeepSeek-Harness-0.6.0-win-x64-setup.exe.blockmap` — 354,566 bytes —
+  SHA-256 `10bc1ad1c407360cdd2c9146e0bbfe06d90b56a1b5d720d00024e54c40ae1d1a`
+- `deepseek-harness-runtime-0.1.3-alpha.1-win32-x64.tar.gz` — 217,725,115
   bytes — SHA-256
-  `a2c50c7d8f8eb48ac2fc31dc5f51559e59ae7c6e24a6fff6d37ddb5528be9b1f`
+  `1e324799bd7d8cdcb2a2feda2d580b246f4d62f891321fbd70864a566fbd232b`
 - matching `latest.yml` and `.sha256` files
 
 The release is compiled and published manually from Windows. No GitHub Actions
@@ -80,12 +80,12 @@ workflow is used.
 
 ### Release anti-regresiones solo Windows
 
-0.5.0 publica oficialmente únicamente instalador NSIS y portable para Windows
+0.6.0 publica oficialmente únicamente instalador NSIS y portable para Windows
 x64. Linux y macOS quedan como targets manuales de contribuidores. Durante el
 desarrollo pudieron generarse binarios Linux localmente, pero no fueron
 probados en un sistema Linux real porque el mantenedor usa Windows; necesitan
 testing en Linux antes de considerarse utilizables. No se sube ningún binario
-Linux/macOS como asset oficial de la release 0.5.0. El gate exige instalación y
+Linux/macOS como asset oficial de la release 0.6.0. El gate exige instalación y
 apertura limpia y deliberadamente no exige actualizar una instalación existente
 desde 0.4.3. `0.4.3` sigue siendo la referencia de recuperación conocida porque
 abre bien, pero no es la fuente de verdad de los fixes actuales.
@@ -135,10 +135,10 @@ ventanas descendientes, desinstalación y limpieza.
 
 Artefactos compilados localmente y listos para la carga manual de Windows:
 
-- `FreeCode-DeepSeek-Harness-0.5.0-win-x64-setup.exe` — 344.948.290 bytes
-- `FreeCode-DeepSeek-Harness-0.5.0-win-x64-portable.exe` — 344.785.805 bytes
-- `FreeCode-DeepSeek-Harness-0.5.0-win-x64-setup.exe.blockmap` — 354.648 bytes
-- `deepseek-harness-runtime-0.1.3-alpha.1-win32-x64.tar.gz` — 217.711.087 bytes
+- `FreeCode-DeepSeek-Harness-0.6.0-win-x64-setup.exe` — 344.947.704 bytes
+- `FreeCode-DeepSeek-Harness-0.6.0-win-x64-portable.exe` — 344.785.217 bytes
+- `FreeCode-DeepSeek-Harness-0.6.0-win-x64-setup.exe.blockmap` — 354.566 bytes
+- `deepseek-harness-runtime-0.1.3-alpha.1-win32-x64.tar.gz` — 217.725.115 bytes
 - `latest.yml` y archivos `.sha256` correspondientes
 
 La release se compila y publica manualmente desde Windows. No se usa ningún

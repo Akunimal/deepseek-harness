@@ -137,7 +137,7 @@ echo "package-runtime: installing complete workspace closure"
 TARGET_OS="${DSH_TARGET_OS:-win32}"
 TARGET_CPU="${DSH_TARGET_CPU:-x64}"
 if [[ "$TARGET_OS" != "win32" || "$TARGET_CPU" != "x64" ]]; then
-  echo "package-runtime: unsupported target $TARGET_OS/$TARGET_CPU; 0.5.0 is Windows-only (win32/x64)" >&2
+  echo "package-runtime: unsupported target $TARGET_OS/$TARGET_CPU; 0.6.0 is Windows-only (win32/x64)" >&2
   exit 2
 fi
 node -e "const fs=require('node:fs'); const p=process.argv[1]; const os=process.argv[2]; const cpu=process.argv[3]; let s=fs.readFileSync(p,'utf8'); s += '\\nsupportedArchitectures:\\n  os:\\n    - '+os+'\\n  cpu:\\n    - '+cpu+'\\n'; fs.writeFileSync(p,s)" "$STAGE/pnpm-workspace.yaml" "$TARGET_OS" "$TARGET_CPU"
@@ -171,7 +171,7 @@ node "$ROOT/scripts/rebuild-runtime-native.mjs" "$STAGE"
 
 # Verify that the Windows native packages survived the install + materialize.
 # Without these the harness CLI dies at boot ("Could not load sharp / koffi").
-# 0.5.0 deliberately does not install or publish Linux/macOS runtime payloads.
+# 0.6.0 deliberately does not install or publish Linux/macOS runtime payloads.
 echo "package-runtime: verifying native optional packages in stage"
 NATIVE_OK=true
 check_native() {

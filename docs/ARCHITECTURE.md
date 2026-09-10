@@ -31,7 +31,7 @@ flowchart LR
    integration, renderer sandboxing and the preload bridge.
 5. Provider seeding maintains the OpenCode Free route and removes only the
    managed legacy `gemini-web` route. Gemini2API is not started, packaged or
-   exposed by 0.5.0.
+   exposed by 0.6.0.
 6. The managed MCP catalog is materialized under `dsh-home/mcp/servers.json`.
    Standard mounts Serena and free-search only when their persisted flags are
    enabled. The bridge reports a server ready only after
@@ -149,7 +149,7 @@ edits are temporary working changes until represented by a patch. See
 
 ## Windows release scope
 
-0.5.0 publishes only Windows x64 NSIS and portable artifacts. Linux/macOS are
+0.6.0 publishes only Windows x64 NSIS and portable artifacts. Linux/macOS are
 contributor-only manual builds and have no release gate, no binary upload and
 no claim of parity. The final local gate is documented in
-[`docs/ROADMAP-0.5.0.md`](ROADMAP-0.5.0.md).
+[`docs/ROADMAP-0.6.0.md`](ROADMAP-0.6.0.md).

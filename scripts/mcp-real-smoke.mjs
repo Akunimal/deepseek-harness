@@ -73,7 +73,7 @@ function nonEmptyResult(result, label) {
 }
 
 async function probeServer({ id, args, call }) {
-  const client = new Client({ name: 'freecode-release-smoke', version: '0.5.0' })
+  const client = new Client({ name: 'freecode-release-smoke', version: '0.6.0' })
   const transport = new StdioClientTransport({
     command: uvxCommand,
     args,

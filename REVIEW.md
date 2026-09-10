@@ -1,4 +1,4 @@
-# Code Review — v0.5.0 Pre-Release Audit
+# Code Review — v0.6.0 Pre-Release Audit
 
 **Fecha:** 2026-08-29
 **Alcance:** Revisión lateral completa del codebase FreeCode DeepSeek Harness
@@ -257,9 +257,9 @@
 
 ---
 
-## Plan de Correcciones para v0.5.0 — COMPLETED ✅
+## Plan de Correcciones para v0.6.0 — COMPLETED ✅
 
-All fixes from the code review have been implemented and committed as part of the v0.5.0 release cycle.
+All fixes from the code review have been implemented and committed as part of the v0.6.0 release cycle.
 
 ### Fase 1: Fixes Críticos ✅
 
@@ -289,7 +289,7 @@ All fixes from the code review have been implemented and committed as part of th
 | 12 | updater.ts | checkInFlight TTL | Add timeout to dedup | `21f5b6f` |
 | 13 | harness-supervisor.ts | tryGrabs listener isolation | try/catch per listener | `21f5b6f` |
 
-### Fase 4: Additional Hardening (v0.5.0 final pass) ✅
+### Fase 4: Additional Hardening (v0.6.0 final pass) ✅
 
 | # | Archivo | Issue | Fix | Commit |
 |---|---------|-------|-----|--------|
@@ -300,7 +300,7 @@ All fixes from the code review have been implemented and committed as part of th
 
 ---
 
-## Upstream Sync Status (v0.5.0) — COMPLETED ✅
+## Upstream Sync Status (v0.6.0) — COMPLETED ✅
 
 | Item | Value |
 |---|---|
@@ -310,4 +310,4 @@ All fixes from the code review have been implemented and committed as part of th
 | Files changed | ~8,000 |
 | Method | git worktree + robocopy replacement |
 | Local patches re-applied | `windowsHide` in SDK client.ts, `node-pty` ConPTY patch |
-| **Status** | **Completed in v0.5.0** — committed as `2e70569` |
+| **Status** | **Completed in v0.6.0** — committed as `2e70569` |
