@@ -59,7 +59,7 @@ codex/0.7.0-remediation.
 
 | Phase | Scope | State | Commit | Push | Evidence | Lock condition |
 |---|---|---|---|---|---|---|
-| 0 | Documentation truth, baseline and stale-claim checks | UNVERIFIED | — | — | docs/evidence/0.7.0/phase-00 | Current README/release docs agree and diff check is clean. |
+| 0 | Documentation truth, baseline and stale-claim checks | VERIFIED | e67f020035 | origin/codex/0.7.0-remediation | docs/evidence/0.7.0/phase-00 | Current README/release docs agree and diff check is clean. |
 | 1 | Upstream refresh, ordered patch manifest and idempotent replay | PLANNED | — | — | docs/evidence/0.7.0/phase-01 | Clean refresh replays twice, vendor-only and fail-closed. |
 | 2 | RTK, uv/servers and complete Windows runtime closure | PLANNED | — | — | docs/evidence/0.7.0/phase-02 | Empty PATH and blocked network still initialize/call required tools. |
 | 3 | One hidden Win32 launch seam and event-level window trace | PLANNED | — | — | docs/evidence/0.7.0/phase-03 | No attributed helper window or bypass in stress traces. |
