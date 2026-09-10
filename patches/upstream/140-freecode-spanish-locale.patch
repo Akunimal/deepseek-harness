@@ -1,5 +1,5 @@
 diff --git a/vendor/deepseek-harness/packages/client/locale/src/client/index.ts b/vendor/deepseek-harness/packages/client/locale/src/client/index.ts
-index 8370696886..5be054a11d 100644
+index 8370696886..9ce5905c42 100644
 --- a/vendor/deepseek-harness/packages/client/locale/src/client/index.ts
 +++ b/vendor/deepseek-harness/packages/client/locale/src/client/index.ts
 @@ -18,9 +18,9 @@ import {
@@ -14,12 +14,10 @@ index 8370696886..5be054a11d 100644
  } from '../locales/settings.ts'
  import type { LanguageRowInjected } from './LanguageRow.tsx'
  import { LanguageRow } from './LanguageRow.tsx'
-@@ -115,7 +115,8 @@ export const SETTINGS_NS = 'settings.locale'
- /** The two locales and dictionaries shipped by this package. */
+@@ -116,6 +116,7 @@ export const SETTINGS_NS = 'settings.locale'
  const BUILT_IN_LOCALE_METADATA = {
    zh: { label: '中文', fallback: 'en' },
--  en: { label: 'English' },
-+  en: { label: 'English', fallback: 'es' },
+   en: { label: 'English' },
 +  es: { label: 'Español' },
  } as const satisfies Record<BuiltInLocaleId, Omit<LocaleDefinition, 'id'>>
  const BUILT_IN_LOCALES: readonly LocaleDefinition[] = Object.freeze(
