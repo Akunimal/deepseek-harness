@@ -26,6 +26,9 @@ is not the source of truth for the current fixes.
   browser unless the user asks to view a result.
 - Added live MCP state, errors and registered-tool counts in the MCP settings
   tab and tray. MCP, uvx, workers and OCR helpers are launched headlessly.
+  Serena's own dashboard tray icon remains controlled by Serena's user config:
+  use `web_dashboard_interface: app` or `tray_manager` when that icon is
+  desired; FreeCode does not replace Serena's tray with its own summary.
 - Caveman is on by default in the shell schema and configurable; RTK remains an
   optional user-installed executable and is never bundled, downloaded or
   falsely reported as active.
@@ -57,15 +60,15 @@ enumeration, uninstall and cleanup.
 
 Assets built locally and ready for the manual Windows release upload:
 
-- `FreeCode-DeepSeek-Harness-0.5.0-win-x64-setup.exe` — 344,946,566 bytes —
-  SHA-256 `1b6a18744114c6ba8361ee1d4a706a1b97c7725fa35e552ea7284595f4081f06`
-- `FreeCode-DeepSeek-Harness-0.5.0-win-x64-portable.exe` — 344,784,077 bytes —
-  SHA-256 `01b9c7a9556728e4d6281c332201332482952f85d57973542892424d40f7faa5`
-- `FreeCode-DeepSeek-Harness-0.5.0-win-x64-setup.exe.blockmap` — 354,684 bytes —
-  SHA-256 `a2e839771de8563efb8f61b8e0fb21492fa0b63f0dd5484d309cd8b1ac7f5190`
-- `deepseek-harness-runtime-0.1.3-alpha.1-win32-x64.tar.gz` — 217,711,087
+- `FreeCode-DeepSeek-Harness-0.5.0-win-x64-setup.exe` — 344,948,290 bytes —
+  SHA-256 `3d192aca0eb6e7fdd51b9d4ffec9d0754617eef333bcbcb594fc5dc02c56a4c`
+- `FreeCode-DeepSeek-Harness-0.5.0-win-x64-portable.exe` — 344,785,805 bytes —
+  SHA-256 `971b4b0fd128665e677f6acc2429355b1372fe4a6e3e2cf8edfbfa57fc800d2`
+- `FreeCode-DeepSeek-Harness-0.5.0-win-x64-setup.exe.blockmap` — 354,648 bytes —
+  SHA-256 `277d7cce6afec98b38cf0901bd8dde57d551b3d74522f779d38055895a6343aa`
+- `deepseek-harness-runtime-0.1.3-alpha.1-win32-x64.tar.gz` — 217,707,191
   bytes — SHA-256
-  `1b8d719bb8b63e7f68ac9f32853033ef72c9dcb13d9de0cb24689249f6428179`
+  `a2c50c7d8f8eb48ac2fc31dc5f51559e59ae7c6e24a6fff6d37ddb5528be9b1f`
 - matching `latest.yml` and `.sha256` files
 
 The release is compiled and published manually from Windows. No GitHub Actions
@@ -99,6 +102,9 @@ abre bien, pero no es la fuente de verdad de los fixes actuales.
   que el usuario pida ver un resultado.
 - La tab MCP y la tray muestran estado, errores y cantidad de tools registradas.
   MCP, uvx, workers y OCR se ejecutan headless.
+  El icono de tray propio de Serena sigue dependiendo de su configuración global:
+  usá `web_dashboard_interface: app` o `tray_manager`; FreeCode no reemplaza
+  esa tray por su resumen.
 - Caveman queda activado por defecto en el schema del shell y es configurable;
   RTK sigue siendo un ejecutable opcional instalado por el usuario, nunca
   incluido, descargado ni mostrado como activo sin existir.
@@ -129,9 +135,9 @@ ventanas descendientes, desinstalación y limpieza.
 
 Artefactos compilados localmente y listos para la carga manual de Windows:
 
-- `FreeCode-DeepSeek-Harness-0.5.0-win-x64-setup.exe` — 344.946.566 bytes
-- `FreeCode-DeepSeek-Harness-0.5.0-win-x64-portable.exe` — 344.784.077 bytes
-- `FreeCode-DeepSeek-Harness-0.5.0-win-x64-setup.exe.blockmap` — 354.684 bytes
+- `FreeCode-DeepSeek-Harness-0.5.0-win-x64-setup.exe` — 344.948.290 bytes
+- `FreeCode-DeepSeek-Harness-0.5.0-win-x64-portable.exe` — 344.785.805 bytes
+- `FreeCode-DeepSeek-Harness-0.5.0-win-x64-setup.exe.blockmap` — 354.648 bytes
 - `deepseek-harness-runtime-0.1.3-alpha.1-win32-x64.tar.gz` — 217.711.087 bytes
 - `latest.yml` y archivos `.sha256` correspondientes
 

@@ -94,4 +94,28 @@ describe('embedded MCP catalog', () => {
     expect(search.command).toBe(uvxPath)
     expect(search.enabled).toBe(false)
   })
+
+  it('uses the packaged Serena launcher on Windows without changing other MCP rows', () => {
+    const home = mkdtempSync(join(tmpdir(), 'freecode-mcp-home-'))
+    homes.push(home)
+    const state = ensureEmbeddedMcpConfig(home, {
+      uvxCommand: 'C:\\Tools\\uvx.exe',
+      serenaLauncherPath: 'C:\\Program Files\\FreeCode\\resources\\freecode\\serena-headless-launcher.py',
+    })
+    const config = JSON.parse(readFileSync(state.configPath, 'utf8')) as {
+      servers: Array<{ id: string, command: string, args: string[] }>
+    }
+    const serena = config.servers.find((server) => server.id === 'serena')!
+    expect(serena.command).toBe('C:\\Tools\\uvx.exe')
+    expect(serena.args).toEqual([
+      '--from',
+      'git+https://github.com/oraios/serena',
+      'python',
+      'C:\\Program Files\\FreeCode\\resources\\freecode\\serena-headless-launcher.py',
+      'start-mcp-server',
+      '--context',
+      'claude-code',
+    ])
+    expect(config.servers.find((server) => server.id === 'free-search')!.args).toEqual(['free-search-mcp'])
+  })
 })

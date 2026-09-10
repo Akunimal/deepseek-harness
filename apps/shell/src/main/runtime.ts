@@ -125,7 +125,12 @@ export async function createShellRuntime(cfg: ShellRuntimeConfig): Promise<Shell
     }
   };
   try {
-    const mcp = ensureEmbeddedMcpConfig(mcpHome, { uvxCommand: cfg.uvxCommand });
+    const mcp = ensureEmbeddedMcpConfig(mcpHome, {
+      uvxCommand: cfg.uvxCommand,
+      serenaLauncherPath: process.platform === 'win32'
+        ? join(cfg.resourcesDir, 'serena-headless-launcher.py')
+        : undefined,
+    });
     setMcpCatalog({
       configPath: mcp.configPath,
       servers: mcp.servers.map((server) => ({ ...server, args: [...server.args] })),
@@ -199,7 +204,12 @@ export async function createShellRuntime(cfg: ShellRuntimeConfig): Promise<Shell
     workers: () => pool.workers(),
     mcpState,
     refreshMcpState: () => {
-      const state = ensureEmbeddedMcpConfig(mcpHome, { uvxCommand: cfg.uvxCommand });
+      const state = ensureEmbeddedMcpConfig(mcpHome, {
+        uvxCommand: cfg.uvxCommand,
+        serenaLauncherPath: process.platform === 'win32'
+          ? join(cfg.resourcesDir, 'serena-headless-launcher.py')
+          : undefined,
+      });
       setMcpCatalog({
         configPath: state.configPath,
         servers: state.servers.map((server) => ({ ...server, args: [...server.args] })),

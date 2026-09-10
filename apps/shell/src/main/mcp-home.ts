@@ -37,6 +37,8 @@ export const SERVER_DEFINITIONS = BASE_SERVER_DEFINITIONS
 export interface EmbeddedMcpOptions {
   /** Absolute uvx path selected by the Windows bootstrap, when available. */
   uvxCommand?: string
+  /** Packaged Serena launcher that prevents SolidLSP's Windows shell hop. */
+  serenaLauncherPath?: string
 }
 
 interface ManagedMcpServer {
@@ -62,10 +64,26 @@ export interface EmbeddedMcpState {
 }
 
 function definitions(options: EmbeddedMcpOptions = {}): typeof BASE_SERVER_DEFINITIONS {
-  if (options.uvxCommand === undefined) return BASE_SERVER_DEFINITIONS
-  return BASE_SERVER_DEFINITIONS.map((server) => server.command === 'uvx'
-    ? { ...server, command: options.uvxCommand }
-    : server) as unknown as typeof BASE_SERVER_DEFINITIONS
+  return BASE_SERVER_DEFINITIONS.map((server) => {
+    if (server.id === 'serena' && options.serenaLauncherPath !== undefined) {
+      return {
+        ...server,
+        command: options.uvxCommand ?? server.command,
+        args: [
+          '--from',
+          'git+https://github.com/oraios/serena',
+          'python',
+          options.serenaLauncherPath,
+          'start-mcp-server',
+          '--context',
+          'claude-code',
+        ],
+      }
+    }
+    return server.command === 'uvx' && options.uvxCommand !== undefined
+      ? { ...server, command: options.uvxCommand }
+      : server
+  }) as unknown as typeof BASE_SERVER_DEFINITIONS
 }
 
 function defaultConfig(options: EmbeddedMcpOptions = {}): EmbeddedMcpConfig {

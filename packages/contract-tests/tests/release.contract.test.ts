@@ -160,6 +160,8 @@ describe('release and runtime packaging contracts', () => {
   it('keeps embedded MCP and child-process headless contracts explicit', () => {
     const mcpConfig = readFileSync(join(ROOT, 'scripts/mcp-config.mjs'), 'utf8');
     const mcpHome = readFileSync(join(ROOT, 'apps/shell/src/main/mcp-home.ts'), 'utf8');
+    const runtime = readFileSync(join(ROOT, 'apps/shell/src/main/runtime.ts'), 'utf8');
+    const serenaLauncher = readFileSync(join(ROOT, 'apps/shell/resources/freecode/serena-headless-launcher.py'), 'utf8');
     const supervisor = readFileSync(join(ROOT, 'apps/shell/src/main/harness-supervisor.ts'), 'utf8');
     const updater = readFileSync(join(ROOT, 'apps/shell/src/main/harness-updater.ts'), 'utf8');
     const mcpTransport = readFileSync(join(ROOT, 'vendor/deepseek-harness/packages/mcp/mcp-client/src/transport.ts'), 'utf8');
@@ -187,6 +189,10 @@ describe('release and runtime packaging contracts', () => {
     expect(mcpTransport).toContain('new StdioClientTransport');
     expect(mcpTransport).toContain("stderr: 'pipe'");
     expect(sdkStdio).toMatch(/windowsHide:\s+(?:process|node_process_1\.default)\.platform === 'win32'/);
+    expect(runtime).toContain('serena-headless-launcher.py');
+    expect(serenaLauncher).toContain('shell=False');
+    expect(serenaLauncher).toContain('CREATE_NO_WINDOW');
+    expect(serenaLauncher).toContain('ManagedSubprocessLauncher.launch');
   });
 
   it('guards the NSIS runtime truncation regression', () => {
