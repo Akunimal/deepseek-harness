@@ -1,11 +1,14 @@
 # FreeCode 0.6.0 definitive roadmap
 
-Last updated: 2026-09-09
+Last updated: 2026-09-10
 
 This is the execution order for the Windows-only anti-regression release. The
-ledger in [`STATE-0.6.0.md`](STATE-0.6.0.md) is the evidence source. A part is
-not called complete because its code exists: it must pass its gate and then be
-marked `LOCKED` so later cleanup does not reopen verified behavior.
+ledger in [`STATE-0.6.0.md`](STATE-0.6.0.md) is the evidence source. The
+published 0.6.0 gate was only a partial baseline: see
+[`AUDIT-0.6.0-TEST-PLAN.md`](AUDIT-0.6.0-TEST-PLAN.md) for the missing runtime,
+window, Git, locale and streaming contracts. A part is not called complete
+because its code exists: it must pass its gate and then be marked `LOCKED` so
+later cleanup does not reopen verified behavior.
 
 ## Closed decisions
 
@@ -60,11 +63,13 @@ real exit barrier. No fixed sleep is synchronization. Direct children use
 `windowsHide:true` and `shell:false`; no `cmd.exe`, `start` or terminal bridge
 is allowed for implementation processes.
 
-Tests cover restart/exit races, stop with a pending respawn, five failed boots,
-tree termination, one active `dsh` PID and real Win32 descendant window
-enumeration. The supervisor gate is 50 start/restart/stop cycles with zero
-duplicate processes and zero console windows. Lock only after that gate and a
-packaged smoke.
+Tests must cover restart/exit races, stop with a pending respawn, five failed
+boots, tree termination, one active `dsh` PID and real Win32 descendant window
+enumeration. The old gate only polled stable handles; the replacement gate
+must trace window creation events and all descendants. It is 50
+start/restart/stop cycles plus fault injection with zero duplicate processes,
+zero console windows and zero transient flashes. Lock only after that gate and
+a packaged smoke.
 
 ## Phase 3 — MCP and real tool-call contracts
 
@@ -96,12 +101,15 @@ duration. Statuses are `success`, `failed-local`, `failed-mcp`,
 `failed-provider`, `failed-timeout`, `failed-permission` and
 `failed-invalid-response`. Retries are bounded and are not performed blindly
 for side-effecting calls. An empty response is a classified failure, not a
-successful blank answer. RTK remains optional and is not reported as used when
-its executable is absent. Caveman is configurable and defaults on in the shell
-schema; absence of its executable is an explicit no-op.
+successful blank answer. RTK is now a required packaged Windows dependency,
+resolved by absolute payload path and verified offline; it is not a user PATH
+optional. Caveman is configurable and defaults on in the shell schema; absence
+of its executable is an explicit no-op until its packaging policy is closed.
 
 Gate: a real local MCP fixture and the packaged Serena/free-search smoke both
-complete initialization, schema registration and at least one tool call.
+complete initialization, schema registration and at least one tool call with
+network blocked and no external `uvx` path. The same gate must include an
+adversarial incomplete-stream/empty-response fixture.
 
 ## Phase 4 — bounded OCR fallback
 
@@ -130,9 +138,10 @@ Only a reproduced current failure is allowed to change a verified component.
 Do a clean Windows install using the existing installer. Launch from the real
 shortcut and verify its working directory, app opening, picker bridge, project
 selection, Serena, a real tool, close and relaunch. Verify the packaged native
-ABI, runtime manifest, managed uvx bootstrap and bundled Tesseract. If this
-passes, lock packaging. If it fails, investigate only the observed cause:
-`fs-ext` ABI, directory-picker bridge, manifest/resources or uvx bootstrap.
+ABI, complete runtime manifest, bundled RTK, bundled MCP dependencies and
+Tesseract. If this passes, lock packaging. If it fails, investigate only the
+observed cause: `fs-ext` ABI, directory-picker bridge, manifest/resources, MCP
+closure or process-launch seam.
 
 ## Phase 7 — invisible-state test gates
 
@@ -169,17 +178,19 @@ other-OS contributor builds, upstream → patches order, MCP/Serena/free-search,
 Caveman/RTK, OCR, updater, troubleshooting and the known limitations of
 `0.4.3`.
 
-Only after all gates are green:
+Only after all gates are green for a new corrective candidate:
 
 1. mark verified components `LOCKED`;
 2. compile NSIS and portable Windows artifacts;
 3. run the clean-install smoke on the final files;
-4. create tag `0.6.0`;
+4. use the next version approved for the corrective release; do not silently
+   overwrite the published `0.6.0` baseline;
 5. create the release and upload only Windows binaries.
 
-## Implementation closeout
+## Historical implementation result
 
-The implementation gates are now green on 2026-09-09:
+The implementation gates were green on 2026-09-09, but the 2026-09-10 audit
+superseded that conclusion:
 
 - `pnpm release:gate` exited 0 on the final 0.6.0 candidate;
 - the real MCP gate returned 24 Serena tools and 11 free-search tools, then
@@ -187,12 +198,16 @@ The implementation gates are now green on 2026-09-09:
 - the runtime was rebuilt for Electron 35.7.5 / Node ABI 133, including the
   Windows `fs-ext` native module and bundled Tesseract;
 - the final NSIS setup and portable executable were generated, and a fresh
-  silent NSIS installation passed payload, bridge, headless boot, visible
-  descendant-window, shortcut working-directory, uninstall and cleanup checks.
+  silent NSIS installation passed payload, bridge, headless boot, stable
+  descendant-window polling, shortcut working-directory, uninstall and cleanup
+  checks;
+- it did not prove packaged RTK, offline MCP closure, Spanish locale, event-
+  level absence of transient windows, Git resolution inside DSH or incomplete
+  provider-stream handling.
 
 The clean-install gate deliberately does not perform an upgrade from 0.4.3.
 The picker bridge is validated in the installed payload and bridge contracts;
 Serena project activation and real tool execution are additionally validated
-against the packaged dsh runtime by `scripts/mcp-real-smoke.mjs`. This keeps
-the release gate deterministic while preserving the exact regression coverage
-that matters for the previous installer failure.
+against the packaged dsh runtime by `scripts/mcp-real-smoke.mjs`, but that
+script currently permits the bootstrap/user `uvx` path. The next gate must be
+offline and self-contained before another tag or release is created.

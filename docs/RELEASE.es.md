@@ -1,100 +1,130 @@
 # Release y packaging
 
-Este repositorio es el fork público `Akunimal/free-code-deepseek-harness` de
-`deepseek-ai/deepseek-harness`. La rama de producto en este checkout es `main`;
-el subtree `vendor/deepseek-harness` conserva la referencia del upstream.
-El tag de release es el límite previsto de versionado para la GUI de escritorio
-y el harness web completo. El código conserva configuración de packaging
-multiplataforma, pero la release publicada `v0.2.2` contiene sólo artefactos
-Windows x64; macOS y Linux no están incluidos ni declarados como probados en
-esa release.
+Este repositorio es el fork público Akunimal/free-code-deepseek-harness de
+deepseek-ai/deepseek-harness. El código de producto vive fuera del subtree
+vendor/deepseek-harness cuando es posible; los cambios de upstream se
+reproducen mediante el stack ordenado de patches.
 
-Las releases se realizan manualmente. Los pushes a ramas no publican
-instaladores y este repositorio no tiene workflow de GitHub Actions para
-releases.
+## Baseline actual
 
-## Build local
+La release publicada 0.6.0 es una baseline auditada para Windows x64:
 
-```bash
-pnpm install
+- instalador NSIS de Windows 0.6.0;
+- ejecutable portable de Windows 0.6.0.
+
+El gate histórico de 0.6.0 comprobó instalación limpia, acceso directo,
+bridge del directory picker, arranque empaquetado básico, payload OCR y
+llamadas MCP reales usando el entorno disponible/bootstrap. No comprobó que
+RTK estuviera empaquetado, que los MCP fueran offline-completos, que estuviera
+el español, que nunca aparecieran ventanas helper de corta duración, que Git
+se resolviera dentro de DSH ni que un stream truncado no terminara como éxito
+vacío. No describas el artefacto publicado como completamente autocontenido.
+
+0.4.3 es la última referencia operativa porque abre bien. No es una garantía
+de compatibilidad ni la fuente de verdad del código actual. El gate de 0.7.0
+no exige actualizar desde 0.4.3; exige instalar limpio, abrir, seleccionar un
+proyecto y relanzar.
+
+El contrato correctivo está en el
+[roadmap de 0.7.0](ROADMAP-0.7.0.md), con estado en el
+[ledger de 0.7.0](STATE-0.7.0.md). Los hallazgos completos de sólo lectura
+están en [AUDIT-0.6.0-TEST-PLAN.md](AUDIT-0.6.0-TEST-PLAN.md).
+
+## Build local de Windows
+
+Ejecutá desde PowerShell en Windows x64:
+
+~~~
+pnpm install --frozen-lockfile
+pnpm apply:upstream-patches
 pnpm test
 pnpm test:contract
-pnpm build:desktop
-```
+pnpm typecheck
+pnpm build:vendor
+pnpm build:shell
+pnpm package:runtime
+pnpm --filter @freecode/shell package
+pnpm --filter @freecode/shell smoke:nsis
+pnpm release:gate
+~~~
 
-`build:desktop` compila el shell, ejecuta `scripts/package-runtime.sh` e invoca
-electron-builder. El script de runtime compila las librerías y la web upstream,
-copia un stage limpio, elimina sólo el `postinstall` de desarrollo del upstream,
-instala el workspace completo, verifica `apps/cli/lib/bin.js` y el link de
-Cordis, y copia el stage a los recursos ignorados del packaging.
+Estos comandos son locales y no usan GitHub Actions. El gate de 0.7.0 debe
+agregar las pruebas de dependencias offline, RTK, Git/sandbox, español,
+streams adversariales y ventanas Win32 por eventos descritas en el roadmap.
+Los recursos obligatorios deben hacer fallar el gate cuando faltan; no se
+pueden saltear silenciosamente porque la máquina del desarrollador no tiene
+un fixture.
 
-El target Windows genera `FreeCode-DeepSeek-Harness-<version>-win-x64-setup.exe`
-(NSIS) y `FreeCode-DeepSeek-Harness-<version>-win-x64-portable.exe`. El portable
-no tiene paso de instalación y guarda su directorio `data/` junto al ejecutable.
-El runtime empaquetado es autocontenido: después de descargar un artefacto, el
-usuario no necesita Node, pnpm, Git, Go ni Python. Los demás targets de plataforma
-quedan como configuración de código fuente hasta que una release futura los
-incluya y pruebe explícitamente.
+Los artefactos Windows esperados de 0.6.0 son:
 
-RTK sigue siendo una optimización opcional del entorno del usuario. El shell
-expone su configuración para Bash y Windows PowerShell, pero el paquete de
-escritorio no incluye, descarga ni instala el [ejecutable de RTK](https://github.com/rtk-ai/rtk).
-Cuando el toggle está habilitado y RTK ya está en `PATH`, sólo se envuelven
-comandos CLI simples elegibles para reducir la salida que recibe el modelo; la
-sintaxis de shell compuesta queda intacta y la ausencia del ejecutable no cambia
-el comportamiento original.
+~~~
+apps/shell/release/FreeCode-DeepSeek-Harness-0.6.0-win-x64-setup.exe
+apps/shell/release/FreeCode-DeepSeek-Harness-0.6.0-win-x64-portable.exe
+apps/shell/release/FreeCode-DeepSeek-Harness-0.6.0-win-x64-setup.exe.blockmap
+apps/shell/release/win-unpacked/FreeCode DeepSeek Harness.exe
+~~~
 
-FreeCode consulta automáticamente la release de GitHub del fork, el asset
-compatible del Harness y el commit upstream registrado en `runtime-manifest.json`.
-Cuando hay una actualización compatible, la flecha de descarga junto a
-Configuración abre el flujo de confirmación; la descarga valida, detiene y
-reinicia sólo `dsh` para una actualización del Harness y reemplaza atómicamente
-`resources/freecode/dsh`; el shell, el pool
-`opencode2api`, Tor y los datos del usuario no se reemplazan. La actualización de
-la aplicación completa sigue siendo una ruta separada de `electron-updater` y no
-se usa para publicar releases. Desde un checkout se puede ejecutar además
-`node scripts/update-upstream-local.mjs`, que actualiza el subtree upstream y
-reconstruye sólo `package:runtime`; la app portable nunca intenta compilar sin
-toolchain.
+Los nombres de 0.7.0 deben salir de la versión del package y verificarse
+después del packaging; no copies el nombre 0.6.0 en una release nueva.
 
-El package local también genera un asset exclusivo del Harness junto a los
-instaladores:
+## Política de dependencias runtime
 
-```text
-apps/shell/release/deepseek-harness-runtime-0.1.1-rc.2-win32-x64.tar.gz
-apps/shell/release/deepseek-harness-runtime-0.1.1-rc.2-win32-x64.tar.gz.sha256
-```
+El instalador 0.6.0 contiene Electron, el runtime del Harness, el worker de
+OpenCode, archivos nativos del picker/runtime y Tesseract. No contiene RTK y
+sus filas administradas de Serena/free-search pueden usar uvx
+externo/bootstrap. Es un defecto abierto de 0.7.0, no una política final
+aceptable.
 
-Los tarballs por plataforma y sus digests SHA-256 se adjuntan manualmente a la
-release del fork cuando corresponde. Este camino no usa GitHub Actions ni consume
-cuota de workflows.
+Para 0.7.0, el cierre instalado debe enumerar versión, arquitectura, origen,
+licencia, hash y ruta relativa de RTK, uv/uvx o su reemplazo, Serena,
+free-search, Tesseract, workers y helpers nativos. El primer arranque
+instalado debe funcionar con PATH externo vacío y red bloqueada. Una referencia
+a uvx del perfil del usuario o a una descarga git+https no es una dependencia
+empaquetada.
 
-En el checkout Windows actual, las rutas de prueba son:
+## Publicación sólo Windows
 
-```text
-I:\DeepSeek-Harness\free-code-deepseek-harness\apps\shell\release\FreeCode-DeepSeek-Harness-0.2.2-win-x64-portable.exe
-I:\DeepSeek-Harness\free-code-deepseek-harness\apps\shell\release\FreeCode-DeepSeek-Harness-0.2.2-win-x64-setup.exe
-I:\DeepSeek-Harness\free-code-deepseek-harness\apps\shell\release\win-unpacked\FreeCode DeepSeek Harness.exe
-```
+Ningún artefacto Linux o macOS es asset oficial. Los contribuidores pueden
+compilar en un host nativo, pero un binario Linux generado desde Windows/WSL no
+es evidencia de usabilidad Linux y no debe anunciarse sin testing real en
+Linux. No mezcles node_modules de Windows y WSL; reinstalá dependencias para el
+sistema operativo activo.
 
-## Publicación manual
+El repositorio no tiene workflow de release. Los pushes no compilan ni
+publican instaladores. La publicación es manual, después del gate local, la
+revisión de checksums, la instalación limpia NSIS/portable y el lock del
+ledger.
 
-Seguí [RELEASE-POLICY.md](RELEASE-POLICY.md) para ejecutar el preflight local,
-revisar los artefactos y subirlos manualmente. No se agrega un workflow de
-release para no consumir cuota de GitHub Actions.
+## Updater y actualizaciones del runtime
 
-El owner/repo de GitHub es `Akunimal/free-code-deepseek-harness`.
+El updater de la aplicación no reemplaza al gate de release. Debe conservar el
+control con forma de Enviar y flecha hacia abajo, chequear al iniciar y en su
+intervalo programado, mostrar progreso en tray/notificación durante descarga e
+instalación y respetar los datos del usuario. 0.7.0 no exige actualizar desde
+0.4.3.
 
-## Versionado y estado de v0.2.2
+El camino de actualización de upstream, sólo para el checkout fuente, es:
 
-La release actual es `v0.2.2`. Sus artefactos Windows setup/portable, blockmap,
-`latest.yml`, tarball del runtime del Harness y digest SHA-256 se compilaron y
-subieron manualmente después del preflight local. La captura actual del README
-forma parte de los assets del repositorio. La release se seguirá en
-[GitHub v0.2.2](https://github.com/Akunimal/free-code-deepseek-harness/releases/tag/v0.2.2).
+~~~
+congelar evidencia
+  -> actualizar/fetchear vendor/deepseek-harness
+  -> pnpm apply:upstream-patches
+  -> verificar manifest y replay
+  -> test/typecheck/build/package
+~~~
 
-Antes de una release futura hay que verificar el preflight local completo:
-arranque zero-config, descubrimiento de modelos, registro del provider, streaming
-de mensajes, reinicio de workers, tray/overlay, importación/continuación,
-ciclo de vida del workspace, actualización del runtime, ejecución headless de
-tools y la capa de movimiento de conversación.
+Ver [docs/UPSTREAM-PATCHING.md](UPSTREAM-PATCHING.md) y
+[docs/RELEASE-POLICY.md](RELEASE-POLICY.md).
+
+## Historial y enlaces de release
+
+Los documentos viejos bajo docs/RELEASE-NOTES-v*.md describen releases
+históricas y deliberadamente no se reescriben como instrucciones actuales. La
+baseline publicada se sigue en
+[GitHub release 0.6.0](https://github.com/Akunimal/free-code-deepseek-harness/releases/tag/0.6.0).
+
+La próxima release no debe recibir tag ni publicarse hasta que todas las filas
+críticas de STATE-0.7.0.md estén LOCKED y los artefactos Windows pasen el smoke
+offline completo de instalación limpia.
+
+For the English guide, see [RELEASE.md](RELEASE.md).

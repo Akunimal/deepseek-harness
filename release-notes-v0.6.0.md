@@ -14,6 +14,23 @@ and deliberately does not require upgrading an existing 0.4.3 installation.
 `0.4.3` remains the last known-good recovery reference because it opens, but it
 is not the source of truth for the current fixes.
 
+### Known regression
+
+The Spanish language option is not exposed in the 0.6.0 desktop selector. An
+upstream vendor synchronization replaced the product's `zh`/`en`/`es` locale
+catalog with upstream's `zh`/`en` catalog, and the existing tests did not guard
+the required Spanish contract. This is documented as a release regression and
+will be restored in a follow-up release; it is not an installer or Windows
+packaging failure.
+
+### Known packaging gap
+
+The published 0.6.0 artifact does not bundle RTK; it still relies on an
+optional user-installed executable. The managed MCP servers also rely on the
+external/bootstrap `uvx` path and are not an offline dependency closure. The
+next corrective release must bundle and verify RTK and every declared runtime
+dependency before it is treated as self-contained.
+
 ### User-visible changes
 
 - Removed Gemini2API completely: no Gemini process, provider, selector model,
@@ -89,6 +106,23 @@ Linux/macOS como asset oficial de la release 0.6.0. El gate exige instalación y
 apertura limpia y deliberadamente no exige actualizar una instalación existente
 desde 0.4.3. `0.4.3` sigue siendo la referencia de recuperación conocida porque
 abre bien, pero no es la fuente de verdad de los fixes actuales.
+
+### Regresión conocida
+
+La opción de idioma español no aparece en el selector de escritorio de 0.6.0.
+Una sincronización del vendor con upstream reemplazó el catálogo propio
+`zh`/`en`/`es` por el catálogo upstream `zh`/`en`, y los tests existentes no
+protegían el contrato obligatorio de español. Queda documentado como una
+regresión de esta release y se restaurará en una release posterior; no es un
+fallo del instalador ni del packaging de Windows.
+
+### Faltante conocido de empaquetado
+
+El artefacto publicado de 0.6.0 no incluye RTK; todavía depende de un
+ejecutable opcional instalado por el usuario. Los MCP administrados también
+dependen de la ruta externa o bootstrap de `uvx` y no forman una clausura de
+dependencias offline. La próxima release correctiva debe incluir y verificar
+RTK y cada dependencia runtime declarada antes de considerarse autocontenida.
 
 ### Cambios visibles
 

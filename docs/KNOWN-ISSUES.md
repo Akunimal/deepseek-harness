@@ -1,13 +1,21 @@
 # Known issues / Problemas conocidos
 
-Última revisión / Last reviewed: 2026-09-07
+Última revisión / Last reviewed: 2026-09-10
 Baseline revisada / Reviewed baseline: `v0.6.0`
 
 ## Estado actual / Current status
 
-No hay un bug funcional bloqueante confirmado en el checkout actual. La alerta degradada del primer arranque quedó corregida en `v0.2.2`. Los problemas de selector de idioma, ventanas de tool-calling, fondos animados, avisos de apagado del pool y documentación bilingüe que aparecen en planes históricos no describen el estado actual; se conservan allí como registro de versiones anteriores.
+El checkout publicado de `0.6.0` tiene issues abiertos de release: la opción
+español no aparece en el selector, RTK no está empaquetado, los MCP dependen de
+`uvx` externo/bootstrap, el test de ventanas no captura flashes transitorios y
+Git no tiene diagnóstico suficiente dentro del sandbox. La alerta degradada del
+primer arranque quedó corregida en `v0.2.2`, pero eso no cierra estos contratos.
 
-There is no confirmed release-blocking functional bug in the current checkout. The first-start degraded-catalog alert was fixed in `v0.2.2`. The language-selector, tool-calling window, animated-background, pool-shutdown notice, and bilingual-documentation issues mentioned in historical plans do not describe the current state; they remain there as historical release records.
+The published `0.6.0` checkout has open release issues: Spanish is missing from
+the selector, RTK is not bundled, MCPs depend on external/bootstrap `uvx`, the
+window test does not capture transient flashes, and Git lacks sufficient
+sandbox diagnostics. The first-start degraded-catalog alert was fixed in
+`v0.2.2`, but it does not close these contracts.
 
 ## Limitaciones operativas / Operational limitations
 
@@ -23,17 +31,34 @@ The portable and setup artifacts include a local runtime and can require several
 
 Los artefactos portable y setup incluyen un runtime local y pueden requerir varios minutos y bastante espacio en disco durante la primera instalación o extracción. Es un costo operativo del empaquetado actual, no una evidencia de que la aplicación se haya colgado. Las notas de release deben seguir informando el tamaño esperado y el comportamiento del primer arranque.
 
-### KI-003 — RTK and Caveman remain external optional tools / RTK y Caveman siguen siendo herramientas externas opcionales
+### KI-003 — RTK is not bundled yet / RTK todavía no está empaquetado
 
-RTK and Caveman are not bundled, downloaded, or installed by FreeCode. The Shell settings card exposes independent toggles; both default on when their executable is present. A toggle only takes effect when the corresponding executable is already available; otherwise the original eligible command runs. This is intentional.
+RTK is not bundled in the published `0.6.0` artifact. The code still probes
+the user PATH, so the release is not self-contained. The corrective plan must
+ship RTK with version/hash/license metadata and verify it offline. Caveman's
+current optional behavior remains separate and must not be used as evidence that
+RTK is packaged.
 
-FreeCode no incluye, descarga ni instala RTK ni Caveman. La tarjeta Shell de Configuración expone toggles independientes; ambos quedan activos por defecto si existe su ejecutable. Cada toggle sólo tiene efecto cuando ya existe el ejecutable correspondiente; de lo contrario se ejecuta el comando elegible original. Es intencional.
+RTK no está incluido en el artefacto publicado de `0.6.0`: el código todavía
+consulta el PATH del usuario y por eso el release no es autocontenido. El plan
+correctivo debe incluir RTK con metadata de versión/hash/licencia y verificarlo
+offline. El comportamiento opcional actual de Caveman es separado y no prueba
+que RTK esté empaquetado.
 
 ### KI-004 — External MCP processes need prerequisites / Los procesos MCP externos requieren prerequisites
 
-The MCP client bridge, catalog, configuration file, and managed patch are shipped and enabled on first boot. Windows desktop builds also bootstrap the pinned official `uvx.exe` into the user profile when it is missing. Serena owns semantic code navigation; no separate LSP bridge is shipped. If any prerequisite is unavailable, the managed entry is explicitly reported and the core app continues to boot. See [`mcp-servers.md`](mcp-servers.md).
+The MCP client bridge, catalog, configuration file, and managed patch are
+shipped and enabled on first boot, but the published artifact still bootstraps
+`uvx.exe` in the user profile and fetches server packages externally. This is
+not an offline dependency closure. Serena owns semantic code navigation; no
+separate LSP bridge is shipped. See [`mcp-servers.md`](mcp-servers.md).
 
-El bridge cliente MCP, el catálogo, el archivo de configuración y el patch administrado vienen incluidos y activados en el primer arranque. Los builds de escritorio de Windows también instalan silenciosamente el `uvx.exe` oficial fijado en el perfil del usuario cuando falta. Serena gestiona la navegación semántica; no se distribuye un bridge LSP separado. Si falta algún prerequisite, la entrada administrada lo informa explícitamente y la app principal sigue arrancando. Ver [`mcp-servers.md`](mcp-servers.md).
+El bridge cliente MCP, el catálogo, el archivo de configuración y el patch
+administrado vienen incluidos y activados en el primer arranque, pero el
+artefacto publicado todavía instala/bootstrappea `uvx.exe` en el perfil del
+usuario y descarga los paquetes de servidores. No es una clausura offline.
+Serena gestiona la navegación semántica; no se distribuye un bridge LSP
+separado. Ver [`mcp-servers.md`](mcp-servers.md).
 
 ### KI-005 — Provider/model desynchronization can look like an invalid API key / El desajuste proveedor-modelo puede parecer una API key inválida
 
@@ -49,8 +74,10 @@ Cambiar de proveedor puede recuperar la solicitud sólo si el modelo seleccionad
 
 These entries are kept here so an old report is easy to classify:
 
-- The Spanish language option and the native app locale alignment were restored.
-- Tool calls are headless except for the project selector.
+- The Spanish language option was intended to be restored, but is missing from
+  the published 0.6.0 catalog and remains an open regression.
+- Tool calls request headless execution, but transient descendant-window
+  creation remains unproven and is under audit.
 - The FreeCode animated working background is present.
 - Pool shutdown errors are handled as state/diagnostic information rather than an API-key failure.
 - The primary README, Spanish README, and release descriptions have bilingual coverage.
@@ -58,8 +85,10 @@ These entries are kept here so an old report is easy to classify:
 
 Estas entradas quedan para clasificar rápidamente reportes antiguos:
 
-- Se restauró la opción de español y la alineación del idioma nativo de la app.
-- Los tool calls son headless salvo el selector de proyecto.
+- La opción de español debía estar restaurada, pero falta en el catálogo
+  publicado de 0.6.0 y sigue siendo una regresión abierta.
+- Los tool calls solicitan ejecución headless, pero la creación transitoria de
+  ventanas descendientes sigue sin estar probada y está bajo auditoría.
 - Está presente el fondo animado de trabajo de FreeCode.
 - Los errores de apagado del pool se tratan como estado/diagnóstico y no como fallo de API key.
 - El README principal, el README en español y las descripciones de release tienen cobertura bilingüe.
