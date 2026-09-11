@@ -35,6 +35,22 @@ export const en = {
   'confirm.enable': 'Enable Full access',
 } satisfies Record<PermissionSettingsKey, string>
 
+/** Spanish dictionary. */
+export const es = {
+  'title': 'Permission',
+  'description': 'Choose the default permission mode for new sessions',
+  'loading': 'Loading',
+  'unavailable': 'Unavailable',
+  'preset.readOnly': 'Read Only',
+  'preset.workspaceWrite': 'Workspace Write',
+  'preset.fullAccess': 'Full access',
+  'confirm.title': 'Enable Full access?',
+  'confirm.description': 'Full access lets new sessions reduce confirmation steps and perform more actions directly, including sensitive operations, file changes, or external commands. Only use it when you trust subsequent tasks.',
+  'confirm.acknowledge': 'I understand the risks and want to continue',
+  'confirm.cancel': 'Cancel',
+  'confirm.enable': 'Enable Full access',
+} satisfies Record<PermissionSettingsKey, string>
+
 /** Simplified Chinese dictionary for the current-session popup gate. */
 export const accessZh = {
   'preset.readOnly': '仅可查看',
@@ -52,6 +68,18 @@ export type PermissionAccessKey = keyof typeof accessZh
 
 /** English dictionary for the current-session popup gate. */
 export const accessEn = {
+  'preset.readOnly': 'Read Only',
+  'preset.workspaceWrite': 'Workspace Write',
+  'preset.fullAccess': 'Full access',
+  'confirm.title': 'Enable Full access?',
+  'confirm.description': 'Full access reduces confirmation steps and lets the agent perform more actions directly, including sensitive operations, file changes, or external commands. Only use it when you trust the current task.',
+  'confirm.acknowledge': 'I understand the risks and want to continue',
+  'confirm.cancel': 'Cancel',
+  'confirm.enable': 'Enable Full access',
+} satisfies Record<PermissionAccessKey, string>
+
+/** Spanish dictionary for the current-session popup gate. */
+export const accessEs = {
   'preset.readOnly': 'Read Only',
   'preset.workspaceWrite': 'Workspace Write',
   'preset.fullAccess': 'Full access',

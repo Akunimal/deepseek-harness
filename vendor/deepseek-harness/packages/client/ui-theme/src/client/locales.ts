@@ -28,3 +28,16 @@ export const en = {
   'fontSize.increase': 'Increase font size',
   'fontSize.decrease': 'Decrease font size',
 } satisfies Record<ThemeKey, string>
+
+/** Spanish dictionary. */
+export const es = {
+  'appearance.title': 'Appearance',
+  'appearance.light': 'Light',
+  'appearance.dark': 'Dark',
+  'appearance.system': 'System',
+  'fontSize.title': 'Font size',
+  'fontSize.description': 'Only affects conversation content',
+  'fontSize.unit': 'px',
+  'fontSize.increase': 'Increase font size',
+  'fontSize.decrease': 'Decrease font size',
+} satisfies Record<ThemeKey, string>

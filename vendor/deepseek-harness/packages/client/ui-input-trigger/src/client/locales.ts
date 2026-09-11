@@ -32,3 +32,16 @@ export const en = {
   'crumbs.aria': 'Folder navigation',
   'suggestions.aria': 'Trigger suggestions',
 } satisfies Record<MenuKey, string>
+
+/** Spanish dictionary. */
+export const es = {
+  'command': 'Commands',
+  'skill': 'Skills',
+  'subagent': 'Subagents',
+  'loading': 'Loading…',
+  'drill.aria': 'Browse folder',
+  'drill.hint': 'Browse folder',
+  'drill.key': 'Tab',
+  'crumbs.aria': 'Folder navigation',
+  'suggestions.aria': 'Trigger suggestions',
+} satisfies Record<MenuKey, string>

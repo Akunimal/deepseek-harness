@@ -26,3 +26,15 @@ export const en = {
   'listbox.aria': '/{command} matches',
   'notice.attachmentsUnsupported': '/{command} does not accept attachments; remove them first',
 } satisfies Record<CommandKey, string>
+
+/** Spanish dictionary. */
+export const es = {
+  'search.placeholder': 'Search…',
+  'search.aria': 'Filter options',
+  'status.loading': 'Loading options…',
+  'status.applying': 'Applying…',
+  'status.empty': 'No options',
+  'overlay.aria': '/{command} options',
+  'listbox.aria': '/{command} matches',
+  'notice.attachmentsUnsupported': '/{command} does not accept attachments; remove them first',
+} satisfies Record<CommandKey, string>

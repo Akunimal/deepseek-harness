@@ -60,3 +60,28 @@ export const en = {
   'blocked.composer': 'This model is unavailable — select one to continue',
   'empty.efforts': 'This model provides no reasoning effort levels.',
 } satisfies Record<ModelKey, string>
+
+/** Spanish dictionary. */
+export const es = {
+  'command.description': 'Select the model for this conversation',
+  'option.loadError': 'Catalog failed to load: {message}',
+  'trigger.fallback': 'Select model',
+  'trigger.loading': 'Loading models…',
+  'trigger.selectAria': 'Select model',
+  'trigger.aria': 'Select model, current {model}',
+  'trigger.ariaEffort': 'Select model, current {model}, reasoning effort {effort}',
+  'trigger.ariaThinking': 'Select model, current {model}, thinking {effort}',
+  'menu.aria': 'Model and reasoning effort',
+  'menu.ariaThinking': 'Model and thinking',
+  'menu.model': 'Model',
+  'menu.effort': 'Effort',
+  'menu.thinking': 'Thinking',
+  'effort.providerDefault': 'Default',
+  'status.loading': 'Refreshing model list…',
+  'error.action': 'Model operation failed: {message}',
+  'action.reload': 'Reload',
+  'warning.groupLoad': '{name} failed to load: {message}',
+  'empty.models': 'No models available.',
+  'blocked.composer': 'This model is unavailable — select one to continue',
+  'empty.efforts': 'This model provides no reasoning effort levels.',
+} satisfies Record<ModelKey, string>

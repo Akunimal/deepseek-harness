@@ -27,3 +27,14 @@ export const en = {
   'row.inspect': 'Inspect',
   'menu.userOnly': 'user-only',
 } satisfies Record<SkillKey, string>
+
+/** Spanish dictionary. */
+export const es = {
+  'row.title': 'Skill',
+  'row.running': 'Loading skill',
+  'row.failed': 'Skill load failed',
+  'row.stopped': 'Skill load stopped',
+  'row.instructions': 'Instructions',
+  'row.inspect': 'Inspect',
+  'menu.userOnly': 'user-only',
+} satisfies Record<SkillKey, string>
