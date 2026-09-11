@@ -1,7 +1,7 @@
 # Phase 06 — Evidence
 
 **Date:** 2026-09-10
-**Commit under test:** 38d96ec3a4a33fa0ec41e80f2989c68e9c2aa56a
+**Commit under test:** ab325ca5457ec1b1c5016db85ca22eb89c9ef8a4
 **Branch:** main
 
 ## Scope

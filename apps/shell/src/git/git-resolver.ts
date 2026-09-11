@@ -79,7 +79,6 @@ export interface GitCommandResult {
 
 // ── Environment cache ──────────────────────────────────────────────
 
-const ENV_CACHE_KEY = 'FREECODE_GIT_ENV_PATH'
 const GIT_ENV_CACHE = new Map<string, GitResolveResult>()
 
 /**
@@ -104,7 +103,7 @@ export function resolveGitPath(options: {
   /** Override for testing. */
   pathOverride?: string
 } = {}): GitResolveResult {
-  const cacheKey = [options.packagedResourcesDir ?? 'default', options.pathOverride ?? ''].join(':')
+  const cacheKey = [options.packagedResourcesDir ?? 'default', options.pathOverride ?? '__default__'].join(':')
   const cached = GIT_ENV_CACHE.get(cacheKey)
   if (cached) return cached
 
@@ -126,19 +125,21 @@ export function resolveGitPath(options: {
     }
   }
 
-  // 2. System Git from PATH
-  const systemGit = findInPath('git', options.pathOverride)
-  if (systemGit) {
-    const version = getGitVersion(systemGit)
-    if (version) {
-      const result: GitResolveResult = {
-        path: systemGit,
-        version,
-        source: 'system-path',
-        networkAvailable: true,
+  // 2. System Git from PATH (skip when pathOverride is explicitly empty — sandbox simulation)
+  if (options.pathOverride !== '') {
+    const systemGit = findInPath('git', options.pathOverride)
+    if (systemGit) {
+      const version = getGitVersion(systemGit)
+      if (version) {
+        const result: GitResolveResult = {
+          path: systemGit,
+          version,
+          source: 'system-path',
+          networkAvailable: true,
+        }
+        GIT_ENV_CACHE.set(cacheKey, result)
+        return result
       }
-      GIT_ENV_CACHE.set(cacheKey, result)
-      return result
     }
   }
 
@@ -169,7 +170,6 @@ export function resolveGitPath(options: {
   throw new GitError(
     'executable-not-found',
     'Git executable not found in PATH, packaged resources, or common locations',
-    { source: 'system-path' as never },
   )
 }
 
