@@ -246,10 +246,12 @@ export class LifecycleManager {
   }
 
   /**
-   * Mark startup as beginning. Returns false if boot budget is exhausted.
+   * Mark startup as beginning. Returns false if boot budget is exhausted
+   * or shutdown is in progress.
    */
   beginStartup(): boolean {
     if (this._state === 'failed') return false
+    if (this._state === 'stopping' || this._state === 'stopped') return false
     this._state = 'starting'
     this._generation.advance()
     return true
@@ -316,6 +318,7 @@ export class LifecycleManager {
           cleanup(),
           this.shutdownTimeout(),
         ])
+        this.clearShutdownTimer()
       }
 
       // Wait for processes to exit gracefully
@@ -324,7 +327,9 @@ export class LifecycleManager {
         Promise.all(exitPromises),
         this.shutdownTimeout(),
       ])
+      this.clearShutdownTimer()
     } catch (err) {
+      this.clearShutdownTimer()
       this.config.log?.('error', 'graceful shutdown error', {
         error: err instanceof Error ? err.message : String(err),
       })
@@ -367,9 +372,17 @@ export class LifecycleManager {
   private shutdownTimeout(): Promise<never> {
     return new Promise((_, reject) => {
       this._shutdownTimer = setTimeout(() => {
+        this._shutdownTimer = null
         reject(new Error(`shutdown timeout after ${this.config.shutdownTimeoutMs}ms`))
       }, this.config.shutdownTimeoutMs)
     })
+  }
+
+  private clearShutdownTimer(): void {
+    if (this._shutdownTimer) {
+      clearTimeout(this._shutdownTimer)
+      this._shutdownTimer = null
+    }
   }
 
   /**

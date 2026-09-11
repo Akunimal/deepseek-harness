@@ -166,7 +166,7 @@
       },
       "network": false,
       "required": false,
-      "notes": "Optional; not bundled; resolves from PATH only; code checks rtkInstalled at runtime"
+      "notes": "Optional; not bundled; resolves from PATH only; code checks cavemanInstalled at runtime"
     }
   ]
 }

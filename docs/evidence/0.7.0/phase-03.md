@@ -8,7 +8,7 @@ Diagnostic trace script validates zero visible windows from DSH processes.
 
 ## Deliverables
 
-### 1. `apps/shell/src/main/freecode-launcher.ts` (230 lines)
+### 1. `apps/shell/src/main/freecode-launcher.ts` (281 lines)
 Centralized Win32 process launch module. All FreeCode-owned child processes must route through here.
 
 **Exports:**
@@ -16,6 +16,7 @@ Centralized Win32 process launch module. All FreeCode-owned child processes must
 - `launchHiddenSync(options)` — sync spawn variant for probes (where.exe, PowerShell, tar)
 - `killProcessTree(pid)` — cross-platform tree kill (taskkill /T /F on Win32)
 - `getActiveLaunches()` — diagnostic: all currently tracked launch metrics
+- `getLaunchById(id)` — retrieve specific launch metrics by ID
 - `LaunchError` — structured error class with errorClass taxonomy
 - `HIDDEN_OPTIONS` / `HIDDEN_SYNC_OPTIONS` — base options constants
 
@@ -26,7 +27,7 @@ Centralized Win32 process launch module. All FreeCode-owned child processes must
 4. Structured metrics (launchId, pid, parentPid, generation, requestId, timestamps)
 5. Automatic cleanup from activeLaunches on exit/error
 
-### 2. Spawn Routing (12 call sites across 7 files)
+### 2. Spawn Routing (10 files)
 
 | File | Spawn Count | Type | Status |
 |------|-------------|------|--------|
@@ -37,11 +38,14 @@ Centralized Win32 process launch module. All FreeCode-owned child processes must
 | `uvx-bootstrap.ts` | 2 sync | where.exe + PowerShell zip | ✅ Routed |
 | `torfleet.ts` | 1 async + 2 kill | Tor + taskkill | ✅ Routed |
 | `harness-updater.ts` | 1 sync | tar extraction | ✅ Routed |
+| `resource-paths.ts` | 1 sync | path probe | ✅ Routed |
+| `lifecycle-manager.ts` | 1 async + 1 kill | lifecycle + taskkill | ✅ Routed |
+| `caveman-resolver.ts` | 2 sync | where.exe probes | ✅ Routed |
 
 **Verification:** Zero raw `spawn()`/`spawnSync()`/`child_process` imports remain in main source
 (excluding `freecode-launcher.ts` itself and type-only `import type { ChildProcess }`).
 
-### 3. `scripts/windows-window-trace.mjs` (310 lines)
+### 3. `scripts/windows-window-trace.mjs` (334 lines)
 Post-launch Win32 diagnostic trace. 7 checks:
 
 | Check | Description | Result |
@@ -54,11 +58,15 @@ Post-launch Win32 diagnostic trace. 7 checks:
 | process-tree-visibility | Command line has visible window flags | PASS |
 | reporter-channel-files | Stale reporter channel files in TEMP | PASS |
 
+Note: Window trace baseline was captured in global mode (no --pid). The 4 PID-dependent
+checks (visible-window, window-station-handles, console-handles, process-tree-visibility)
+require a target PID and were not exercised in this baseline.
+
 ### 4. `docs/evidence/0.7.0/phase-03-window-trace.json`
 Baseline diagnostic trace: 2 PASS, 0 FAIL, 0 WARN, 1 SKIP.
 
 ## Files Modified
-- `apps/shell/src/main/freecode-launcher.ts` — NEW (230 lines)
+- `apps/shell/src/main/freecode-launcher.ts` — NEW (281 lines)
 - `apps/shell/src/main/harness-supervisor.ts` — routed through launcher
 - `apps/shell/src/main/index.ts` — routed through launcher
 - `apps/shell/src/main/ocr.ts` — routed through launcher
@@ -66,7 +74,10 @@ Baseline diagnostic trace: 2 PASS, 0 FAIL, 0 WARN, 1 SKIP.
 - `apps/shell/src/main/uvx-bootstrap.ts` — routed through launcher (2 spawns)
 - `apps/shell/src/main/torfleet.ts` — routed through launcher (1 spawn + 2 kills)
 - `apps/shell/src/main/harness-updater.ts` — routed through launcher
-- `scripts/windows-window-trace.mjs` — NEW (310 lines)
+- `apps/shell/src/main/resource-paths.ts` — routed through launcher
+- `apps/shell/src/main/lifecycle-manager.ts` — routed through launcher
+- `apps/shell/src/main/caveman-resolver.ts` — routed through launcher
+- `scripts/windows-window-trace.mjs` — NEW (334 lines)
 - `docs/evidence/0.7.0/phase-03-window-trace.json` — NEW
 
 ## Verification

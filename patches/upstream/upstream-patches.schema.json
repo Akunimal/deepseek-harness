@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "FreeCode upstream patch manifest",
+  "description": "Ordered patch manifest for upstream vendor synchronization",
+  "type": "object",
+  "required": ["upstream", "vendorPrefix", "patches"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "upstream": {
+      "type": "object",
+      "required": ["remote", "ref", "prefix", "version", "syncCommit"],
+      "properties": {
+        "remote": { "type": "string", "description": "Git remote name" },
+        "ref": { "type": "string", "description": "Git ref (branch)" },
+        "prefix": { "type": "string", "description": "Vendor directory prefix" },
+        "version": { "type": "string", "description": "Upstream version string" },
+        "syncCommit": { "type": "string", "description": "Short commit SHA of last sync" }
+      },
+      "additionalProperties": false
+    },
+    "vendorPrefix": { "type": "string", "description": "Required path prefix for all patch files" },
+    "patches": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["file", "order", "owner", "description", "seam", "contractTests", "vendorOnly"],
+        "properties": {
+          "file": { "type": "string", "description": "Patch filename (relative to patches/upstream/)" },
+          "order": { "type": "integer", "description": "Monotonically increasing order number" },
+          "owner": { "type": "string", "description": "Owner/team responsible" },
+          "description": { "type": "string", "description": "What the patch does" },
+          "seam": { "type": "string", "description": "Upstream seam the patch touches" },
+          "contractTests": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Test files that validate this patch"
+          },
+          "vendorOnly": { "type": "boolean", "description": "If true, patch must only touch vendorPrefix paths" }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

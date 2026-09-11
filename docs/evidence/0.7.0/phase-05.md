@@ -8,14 +8,16 @@ Windows: 11 x64
 Deterministic Git resolution, structured error classification, sandbox diagnostics.
 
 ## Files
-- apps/shell/src/git/git-resolver.ts (396 lines after bug fixes)
+- apps/shell/src/git/git-resolver.ts (398 lines after bug fixes)
 - apps/shell/src/sandbox/sandbox-diagnostics.ts (195 lines)
 - apps/shell/tests/git-resolver.test.ts (10 tests)
-- apps/shell/tests/sandbox-diagnostics.test.ts (8 tests, created in bug audit)
+- apps/shell/tests/sandbox-diagnostics.test.ts (9 tests, created in bug audit)
 
 ## Bug fixes applied (2026-09-10)
 1. Removed `as never` type-safety hole in resolveGitPath error throw
 2. Removed dead code `ENV_CACHE_KEY` constant
+3. Fixed cache key collision: sandbox simulation (`pathOverride: ''`) and default call now produce distinct cache keys (`'default:'` vs `'default:__default__'`)
+4. Added `pathOverride !== ''` guard around PATH lookup to correctly support sandbox simulation
 
 ## Tests
 ```
@@ -23,7 +25,7 @@ npx vitest run apps/shell/tests/git-resolver.test.ts
 → 10/10 PASS
 
 npx vitest run apps/shell/tests/sandbox-diagnostics.test.ts
-→ 8/8 PASS
+→ 9/9 PASS
 
 node scripts/verify-offline-mcp.mjs
 → 12/12 PASS

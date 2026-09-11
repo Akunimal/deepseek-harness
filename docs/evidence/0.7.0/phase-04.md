@@ -5,17 +5,21 @@ Commit: 64c6bbc66e
 Windows: 11 x64
 
 ## Scope
-Lifecycle manager: startup lock, child watchdog, health probe, SIGTERM shutdown, package.json singleton.
+Lifecycle manager: startup lock, generation tracking, health probe, graceful staged shutdown, package.json singleton, beginStartup guard.
 
 ## Files
-- apps/shell/src/main/lifecycle-manager.ts (382 lines)
-- apps/shell/tests/lifecycle-manager.test.ts (195 lines, 27 tests)
+- apps/shell/src/main/lifecycle-manager.ts (388 lines after bug fixes)
+- apps/shell/tests/lifecycle-manager.test.ts (195 lines, 19 tests)
 
 ## Tests
 ```
 npx vitest run apps/shell/tests/lifecycle-manager.test.ts
-→ 27/27 PASS
+→ 19/19 PASS
 ```
+
+## Bug fixes applied (2026-09-10)
+1. Fixed timer leak in `gracefulShutdown`: `shutdownTimeout()` timers are now cleared via `clearShutdownTimer()` when the race settles, preventing unhandled rejections
+2. Added guard in `beginStartup()`: returns false when state is 'stopping' or 'stopped', preventing race between shutdown and startup
 
 ## Commit
 ```

@@ -16,7 +16,6 @@ import { join } from 'node:path'
 
 export type GitErrorClass =
   | 'executable-not-found'
-  | 'path-not-resolved'
   | 'sandbox-denied'
   | 'not-a-repository'
   | 'git-failed'
