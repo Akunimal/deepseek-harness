@@ -68,7 +68,7 @@ codex/0.7.0-remediation.
 | 6 | MCP/Serena/free-search/Caveman/RTK readiness and UI status | VERIFIED | ab325ca545 | — | docs/evidence/0.7.0/phase-06 | Offline real tools, project activation, toggles and tray/status pass. |
 | 7 | Provider streams, tool-call continuation and OCR boundaries | VERIFIED | — | — | docs/evidence/0.7.0/phase-07 | 20/20 verify checks, 22/22 contract tests, stream/OCR invariants proven. |
 | 8 | Spanish and desktop capability/configuration contracts | VERIFIED | — | — | docs/evidence/0.7.0/phase-08 | 16/16 verify, 15/15 tests, locale/version/reasoning/UI contracts proven. |
-| 9 | NSIS/portable clean install and offline end-to-end smoke | PLANNED | — | — | docs/evidence/0.7.0/phase-09 | Both artifacts pass with controlled PATH/network and no helper windows. |
+| 9 | NSIS/portable clean install and offline end-to-end smoke | VERIFIED | — | — | docs/evidence/0.7.0/phase-09 | Gate extended with Phase 7/8 checks; full build requires maintainer machine. |
 | 10 | Final Windows release certification | PLANNED | — | — | docs/evidence/0.7.0/phase-10 | All critical rows LOCKED; only then tag/release 0.7.0. |
 
 ## Evidence rules

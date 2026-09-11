@@ -96,17 +96,33 @@ describe('Locale contract — Reasoning policy', () => {
   it('hides effort for non-supporting models', () => {
     const src = readFile(join(APPS, 'src/main/reasoning-policy.ts'));
     expect(src).not.toBeNull();
-    expect(src).toContain('supportsReasoningEffort: false');
+    // Must declare false return for non-reasoning models
+    expect(src).toContain('return false');
   });
 
-  it('provides off/low/high for DeepSeek models', () => {
+  it('has DEEPSEEK_REASONING_EFFORTS with all tiers', () => {
     const src = readFile(join(APPS, 'src/main/reasoning-policy.ts'));
     expect(src).not.toBeNull();
-    // Reasoning values are object properties, not string literals
-    expect(src).toContain('off');
-    expect(src).toContain('low');
-    expect(src).toContain('high');
+    // DeepSeek object must have off, low, high, max
     expect(src).toContain('DEEPSEEK_REASONING_EFFORTS');
+    expect(src).toContain('off:');
+    expect(src).toContain('low:');
+    expect(src).toContain('high:');
+    expect(src).toContain('max:');
+  });
+
+  it('has MIMO_REASONING_EFFORTS with binary toggle', () => {
+    const src = readFile(join(APPS, 'src/main/reasoning-policy.ts'));
+    expect(src).not.toBeNull();
+    // MiMo must only have off and high (binary thinking)
+    expect(src).toContain('MIMO_REASONING_EFFORTS');
+    // Must not have low or max for MiMo
+    const mimoBlock = src.substring(
+      src.indexOf('MIMO_REASONING_EFFORTS'),
+      src.indexOf('}', src.indexOf('MIMO_REASONING_EFFORTS')) + 1
+    );
+    expect(mimoBlock).not.toContain('low:');
+    expect(mimoBlock).not.toContain('max:');
   });
 });
 

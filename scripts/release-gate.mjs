@@ -49,6 +49,9 @@ run('MCP configuration and enable/disable contract', ['exec', 'node', '--test', 
 run('all workspace tests', ['test']);
 run('all workspace contract tests', ['test:contract']);
 run('all workspace typechecks', ['typecheck']);
+run('stream and OCR contract verification', ['exec', 'node', 'scripts/verify-stream-contract.mjs']);
+run('locale and desktop capability contract verification', ['exec', 'node', 'scripts/verify-locale-contract.mjs']);
+run('offline MCP closure verification', ['exec', 'node', 'scripts/verify-offline-mcp.mjs']);
 run('Windows ACL regression tests', [
   '--dir', 'vendor/deepseek-harness', 'exec', 'vitest', 'run',
   'packages/sandbox/sandbox-windows-acl/tests/failure-paths.spec.ts',

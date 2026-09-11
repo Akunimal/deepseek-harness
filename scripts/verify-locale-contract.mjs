@@ -190,8 +190,8 @@ const preloadSrc = readFileSafe(preloadPath);
 
 logCheck(
   'preload-exposes-locale-set',
-  preloadSrc !== null && preloadSrc.includes('locale'),
-  'Preload must expose locale channel',
+  preloadSrc !== null && preloadSrc.includes('localeSet') && preloadSrc.includes('locale'),
+  'Preload must expose localeSet channel',
 );
 
 // ── CHECK 14: IPC validates locale ──────────────────────────────────
@@ -203,8 +203,8 @@ logCheck(
   'ipc-validates-locale',
   ipcSrc !== null
     && ipcSrc.includes('LocaleSetPayload')
-    && (ipcSrc.includes("'zh'") || ipcSrc.includes('"zh"')),
-  'IPC must validate locale with zh/en/es',
+    && ipcSrc.includes("'zh'") && ipcSrc.includes("'en'") && ipcSrc.includes("'es'"),
+  'IPC must validate locale with zh, en, and es',
 );
 
 // ── CHECK 15: Locale contract tests exist ───────────────────────────
