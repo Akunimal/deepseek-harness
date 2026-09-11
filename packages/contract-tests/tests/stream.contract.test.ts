@@ -33,7 +33,7 @@ beforeAll(async () => {
   const translateMod = await import(join(VENDOR, 'packages/llm/llm-deepseek/src/translate.ts'));
   translate = translateMod.translate;
 
-  const errorMod = await import(join(VENDOR, 'packages/llm/llm/src/error.ts'));
+  const errorMod = await import(join(VENDOR, 'packages/llm/llm/src/index.ts'));
   LlmError = errorMod.LlmError;
   EMPTY_RESPONSE_CODE = errorMod.EMPTY_RESPONSE_CODE;
 });
@@ -205,5 +205,53 @@ describe('Stream contract — translate', () => {
     expect(usage).toBeDefined();
     expect(usage.usage.inputTokens).toBe(10);
     expect(usage.usage.outputTokens).toBe(5);
+  });
+
+  it('maps finish_reason=length to max-tokens', async () => {
+    const payloads = (async function* () {
+      yield '{"choices":[{"delta":{"content":"truncated"}}]}';
+      yield '{"choices":[{"delta":{},"finish_reason":"length"}]}';
+      yield '[DONE]';
+    })();
+
+    const chunks = await collect(translate(payloads));
+    const finish = chunks.find(c => c.type === 'finish');
+    expect(finish.reason.kind).toBe('max-tokens');
+  });
+
+  it('maps unknown finish_reason to error', async () => {
+    const payloads = (async function* () {
+      yield '{"choices":[{"delta":{"content":"ok"}}]}';
+      yield '{"choices":[{"delta":{},"finish_reason":"content_filter"}]}';
+      yield '[DONE]';
+    })();
+
+    const chunks = await collect(translate(payloads));
+    const finish = chunks.find(c => c.type === 'finish');
+    expect(finish.reason.kind).toBe('error');
+    expect(finish.reason.failure.code).toBe('CONTENT_FILTER');
+  });
+
+  it('handles multiple tool calls in one response', async () => {
+    const payloads = (async function* () {
+      yield JSON.stringify({
+        choices: [{
+          delta: {
+            tool_calls: [
+              { index: 0, id: 'call_a', function: { name: 'read_file', arguments: '{}' } },
+              { index: 1, id: 'call_b', function: { name: 'write_file', arguments: '{}' } },
+            ],
+          },
+          finish_reason: 'tool_calls',
+        }],
+      });
+      yield '[DONE]';
+    })();
+
+    const chunks = await collect(translate(payloads));
+    const blockStarts = chunks.filter(c => c.type === 'block-start' && c.blockType === 'tool-call');
+    expect(blockStarts).toHaveLength(2);
+    const finish = chunks.find(c => c.type === 'finish');
+    expect(finish.reason.kind).toBe('tool-calls');
   });
 });

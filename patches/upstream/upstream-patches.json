@@ -162,7 +162,9 @@
       "owner": "freecode",
       "description": "Spanish desktop locale as modular upstream-replayable change",
       "seam": "packages/client/locale",
-      "contractTests": [],
+      "contractTests": [
+        "packages/contract-tests/tests/locale.contract.test.ts"
+      ],
       "vendorOnly": true
     }
   ]

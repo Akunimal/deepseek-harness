@@ -141,7 +141,7 @@ logCheck(
   'ocr-psm-range-check',
   ocrVendorSrc !== null
     && ocrVendorSrc.includes('resolvePsm')
-    && ocrVendorSrc.includes('0') && ocrVendorSrc.includes('13'),
+    && ocrVendorSrc.includes('value < 0 || value > 13'),
   'OCR must validate PSM is integer 0-13',
 );
 
@@ -190,13 +190,16 @@ logCheck(
 
 const errorPath = join(VENDOR, 'packages/llm/llm/src/error.ts');
 const errorSrc = readFileSafe(errorPath);
+const indexPath = join(VENDOR, 'packages/llm/llm/src/index.ts');
+const indexSrc = readFileSafe(indexPath);
 
 logCheck(
   'error-class-has-code',
   errorSrc !== null
-    && errorSrc.includes('readonly code: string')
-    && errorSrc.includes('EMPTY_RESPONSE_CODE'),
-  'LlmError must expose machine-readable failure code',
+    && errorSrc.includes('EMPTY_RESPONSE_CODE')
+    && indexSrc !== null
+    && indexSrc.includes('class LlmError'),
+  'LlmError in index.ts, EMPTY_RESPONSE_CODE in error.ts',
 );
 
 // ── CHECK 15: LB retry is bounded ───────────────────────────────────

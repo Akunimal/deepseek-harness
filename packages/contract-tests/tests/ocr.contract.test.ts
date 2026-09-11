@@ -159,4 +159,40 @@ describe('OCR contract — image validation (via extractTextFromImage)', () => {
     const bigImg = makeDummyImage('big.png', 'x'.repeat(OCR_MAX_IMAGE_BYTES + 1));
     await expect(extractTextFromImage(bigImg)).rejects.toThrow();
   });
+
+  it('rejects invalid language code (2-letter)', async () => {
+    setOcrRunnerForTests(async () => 'ok');
+    const img = makeDummyImage();
+    await expect(extractTextFromImage(img, { language: 'en' })).rejects.toThrow();
+  });
+
+  it('rejects uppercase language code', async () => {
+    setOcrRunnerForTests(async () => 'ok');
+    const img = makeDummyImage();
+    await expect(extractTextFromImage(img, { language: 'ENG' })).rejects.toThrow();
+  });
+
+  it('accepts valid language code (eng)', async () => {
+    setOcrRunnerForTests(async () => 'text');
+    const img = makeDummyImage();
+    await expect(extractTextFromImage(img, { language: 'eng' })).resolves.toBe('text');
+  });
+
+  it('rejects PSM out of range (14)', async () => {
+    setOcrRunnerForTests(async () => 'ok');
+    const img = makeDummyImage();
+    await expect(extractTextFromImage(img, { psm: 14 })).rejects.toThrow();
+  });
+
+  it('rejects negative PSM', async () => {
+    setOcrRunnerForTests(async () => 'ok');
+    const img = makeDummyImage();
+    await expect(extractTextFromImage(img, { psm: -1 })).rejects.toThrow();
+  });
+
+  it('accepts valid PSM (0-13)', async () => {
+    setOcrRunnerForTests(async () => 'text');
+    const img = makeDummyImage();
+    await expect(extractTextFromImage(img, { psm: 6 })).resolves.toBe('text');
+  });
 });
