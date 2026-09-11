@@ -8,7 +8,7 @@
  *   - Actionable suggestions for the user/UI
  */
 
-import { resolveGitPath, type GitResolveResult, GitError } from '../git/git-resolver'
+import { resolveGitPath, type GitResolveResult, GitError } from '../git/git-resolver.js'
 
 // ── Types ──────────────────────────────────────────────────────────
 
