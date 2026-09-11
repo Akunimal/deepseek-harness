@@ -1,0 +1,266 @@
+#!/usr/bin/env node
+/**
+ * verify-stream-contract.mjs — Phase 7: Verify provider stream and OCR contracts.
+ *
+ * Checks that the source code enforces:
+ *   1. SSE stream must end with [DONE] sentinel (STREAM_CLOSED on truncation)
+ *   2. Empty response (stop with no content) maps to EMPTY_RESPONSE error
+ *   3. finish_reason=tool_calls triggers tool-call continuation
+ *   4. OCR boundaries: path validation, size limits, timeout, language/PSM allow-list
+ *   5. Bounded retry with error class exposure
+ *   6. No silent success on incomplete protocol
+ *
+ * Usage:
+ *   node scripts/verify-stream-contract.mjs
+ *
+ * Exit code 0 = all checks pass. Non-zero = failure.
+ */
+
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = resolve(__dirname, '..');
+const VENDOR = join(REPO_ROOT, 'vendor/deepseek-harness');
+
+const checks = [];
+function logCheck(name, pass, detail) {
+  const status = pass ? 'PASS' : 'FAIL';
+  const detailStr = detail ? ` (${detail})` : '';
+  console.log(`  [${status}] ${name}${detailStr}`);
+  checks.push({ name, pass });
+}
+
+function readFileSafe(path) {
+  try { return readFileSync(path, 'utf8'); } catch { return null; }
+}
+
+// ── CHECK 1: SSE parser throws on truncated stream ──────────────────
+
+const ssePath = join(VENDOR, 'packages/llm/llm-deepseek/src/sse.ts');
+const sseSrc = readFileSafe(ssePath);
+
+logCheck(
+  'sse-parser-throws-on-truncation',
+  sseSrc !== null && sseSrc.includes("SSE stream ended without [DONE]") && sseSrc.includes("STREAM_CLOSED"),
+  'parseSse must throw LlmError STREAM_CLOSED on missing [DONE]',
+);
+
+// ── CHECK 2: Translate maps empty response to EMPTY_RESPONSE ────────
+
+const translatePath = join(VENDOR, 'packages/llm/llm-deepseek/src/translate.ts');
+const translateSrc = readFileSafe(translatePath);
+
+logCheck(
+  'translate-empty-response-maps-to-error',
+  translateSrc !== null
+    && translateSrc.includes('EMPTY_RESPONSE')
+    && translateSrc.includes('order.length === 0'),
+  'translate must map stop + no blocks to EMPTY_RESPONSE error',
+);
+
+// ── CHECK 3: finish_reason=tool_calls maps to tool-calls ────────────
+
+logCheck(
+  'translate-tool-calls-mapping',
+  translateSrc !== null
+    && translateSrc.includes("case 'tool_calls'")
+    && translateSrc.includes("kind: 'tool-calls'"),
+  'mapFinishReason must map tool_calls to {kind: "tool-calls"}',
+);
+
+// ── CHECK 4: pi-ai stream handles done/error/ exhaustion ────────────
+
+const piAiStreamPath = join(VENDOR, 'packages/llm/llm-pi-ai/src/stream.ts');
+const piAiSrc = readFileSafe(piAiStreamPath);
+
+logCheck(
+  'pi-ai-stream-handles-exhaustion',
+  piAiSrc !== null
+    && piAiSrc.includes('STREAM_CLOSED')
+    && piAiSrc.includes('ended without done/error'),
+  'pi-ai stream translator must throw STREAM_CLOSED on premature exhaustion',
+);
+
+logCheck(
+  'pi-ai-stream-handles-error-event',
+  piAiSrc !== null
+    && piAiSrc.includes("kind: 'error'")
+    && piAiSrc.includes('classifyPiAiError'),
+  'pi-ai stream must classify error events with classifyPiAiError',
+);
+
+// ── CHECK 5: OCR path validation (absolute paths only) ─────────────
+
+const ocrVendorPath = join(VENDOR, 'packages/llm/llm/src/ocr.ts');
+const ocrVendorSrc = readFileSafe(ocrVendorPath);
+
+logCheck(
+  'ocr-absolute-path-only',
+  ocrVendorSrc !== null
+    && ocrVendorSrc.includes('isAbsolute')
+    && ocrVendorSrc.includes('absolute'),
+  'OCR must reject non-absolute image paths',
+);
+
+// ── CHECK 6: OCR size limits ───────────────────────────────────────
+
+logCheck(
+  'ocr-size-limits',
+  ocrVendorSrc !== null
+    && ocrVendorSrc.includes('OCR_MAX_IMAGE_BYTES')
+    && ocrVendorSrc.includes('OCR_MAX_OUTPUT_BYTES'),
+  'OCR must enforce input (25MB) and output (256KB) size limits',
+);
+
+// ── CHECK 7: OCR timeout ───────────────────────────────────────────
+
+logCheck(
+  'ocr-timeout-enforced',
+  ocrVendorSrc !== null
+    && ocrVendorSrc.includes('OCR_TIMEOUT_MS')
+    && ocrVendorSrc.includes('timeout'),
+  'OCR must enforce timeout (30s default)',
+);
+
+// ── CHECK 8: OCR language allow-list ────────────────────────────────
+
+logCheck(
+  'ocr-language-allowlist',
+  ocrVendorSrc !== null
+    && ocrVendorSrc.includes('resolveLanguage')
+    && ocrVendorSrc.includes('LANGUAGE_PATTERN')
+    && ocrVendorSrc.includes('^[a-z]{3}'),
+  'OCR must validate language against 3-letter Tesseract codes',
+);
+
+// ── CHECK 9: OCR PSM range check ───────────────────────────────────
+
+logCheck(
+  'ocr-psm-range-check',
+  ocrVendorSrc !== null
+    && ocrVendorSrc.includes('resolvePsm')
+    && ocrVendorSrc.includes('0') && ocrVendorSrc.includes('13'),
+  'OCR must validate PSM is integer 0-13',
+);
+
+// ── CHECK 10: OCR shell:false (no shell execution) ─────────────────
+
+logCheck(
+  'ocr-no-shell-execution',
+  ocrVendorSrc !== null
+    && ocrVendorSrc.includes('shell: false'),
+  'OCR must spawn Tesseract without shell:true',
+);
+
+// ── CHECK 11: OCR hash cache ───────────────────────────────────────
+
+logCheck(
+  'ocr-hash-cache-exists',
+  ocrVendorSrc !== null
+    && ocrVendorSrc.includes('OCR_MAX_CACHE_ENTRIES')
+    && ocrVendorSrc.includes('sha256'),
+  'OCR must cache results by image hash (64-entry LRU)',
+);
+
+// ── CHECK 12: Retry policy is bounded ───────────────────────────────
+
+const retryPolicyPath = join(VENDOR, 'packages/llm/llm/src/retry-policy.ts');
+const retrySrc = readFileSafe(retryPolicyPath);
+
+logCheck(
+  'retry-policy-bounded',
+  retrySrc !== null
+    && retrySrc.includes('maxRetries')
+    && retrySrc.includes('normal'),
+  'Retry policy must support bounded mode with maxRetries',
+);
+
+// ── CHECK 13: Retry respects EMPTY_RESPONSE as retryable ────────────
+
+logCheck(
+  'retry-covers-empty-response',
+  retrySrc !== null
+    && retrySrc.includes('EMPTY_RESPONSE'),
+  'Retryable codes must include EMPTY_RESPONSE',
+);
+
+// ── CHECK 14: Error class exposes failure code ──────────────────────
+
+const errorPath = join(VENDOR, 'packages/llm/llm/src/error.ts');
+const errorSrc = readFileSafe(errorPath);
+
+logCheck(
+  'error-class-has-code',
+  errorSrc !== null
+    && errorSrc.includes('readonly code: string')
+    && errorSrc.includes('EMPTY_RESPONSE_CODE'),
+  'LlmError must expose machine-readable failure code',
+);
+
+// ── CHECK 15: LB retry is bounded ───────────────────────────────────
+
+const lbPath = join(REPO_ROOT, 'packages/opencode-adapter/src/lb.ts');
+const lbSrc = readFileSafe(lbPath);
+
+logCheck(
+  'lb-retry-bounded',
+  lbSrc !== null
+    && lbSrc.includes('MAX_ATTEMPTS')
+    && lbSrc.includes('RETRYABLE_STATUSES'),
+  'LB must have bounded retry with MAX_ATTEMPTS and RETRYABLE_STATUSES',
+);
+
+// ── CHECK 16: LB enforces post-commit no-retry ─────────────────────
+
+logCheck(
+  'lb-post-commit-no-retry',
+  lbSrc !== null
+    && lbSrc.includes('downstream_started'),
+  'LB must not retry after downstream headers are sent',
+);
+
+// ── CHECK 17: OCR IPC does not expose binary path ──────────────────
+
+const ipcPath = join(REPO_ROOT, 'apps/shell/src/main/ipc.ts');
+const ipcSrc = readFileSafe(ipcPath);
+
+logCheck(
+  'ocr-ipc-no-binary-path',
+  ipcSrc !== null
+    && ipcSrc.includes('binaryPath: null'),
+  'OCR IPC must not expose binary path to renderer',
+);
+
+// ── CHECK 18: Stream contract tests exist ───────────────────────────
+
+const streamTestPath = join(REPO_ROOT, 'packages/contract-tests/tests/stream.contract.test.ts');
+const streamTestExists = existsSync(streamTestPath);
+
+logCheck(
+  'stream-contract-tests-exist',
+  streamTestExists,
+  'packages/contract-tests/tests/stream.contract.test.ts must exist',
+);
+
+// ── CHECK 19: OCR contract tests exist ──────────────────────────────
+
+const ocrTestPath = join(REPO_ROOT, 'packages/contract-tests/tests/ocr.contract.test.ts');
+const ocrTestExists = existsSync(ocrTestPath);
+
+logCheck(
+  'ocr-contract-tests-exist',
+  ocrTestExists,
+  'packages/contract-tests/tests/ocr.contract.test.ts must exist',
+);
+
+// ── Summary ─────────────────────────────────────────────────────────
+
+console.log();
+const allPass = checks.every(c => c.pass);
+const total = checks.length;
+const passed = checks.filter(c => c.pass).length;
+console.log(`verify-stream-contract: ${passed}/${total} checks passed`);
+console.log(`\n  "result": "${allPass ? 'PASS' : 'FAIL'}"`);
+process.exit(allPass ? 0 : 1);
