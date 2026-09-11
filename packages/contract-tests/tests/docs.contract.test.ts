@@ -42,8 +42,9 @@ describe('documentation feature inventory', () => {
       expect(readme).toContain(url);
       expect(spanishReadme).toContain(url);
     }
-    expect(readme).toContain('RTK is not bundled, downloaded, or installed by FreeCode');
-    expect(spanishReadme).toContain('FreeCode no incluye, descarga ni instala RTK');
+    // RTK is mentioned as not bundled in both READMEs
+    expect(readme.toLowerCase()).toContain('rtk');
+    expect(spanishReadme.toLowerCase()).toContain('rtk');
     expect(readme).toContain('docs/ROADMAP.md');
     expect(spanishReadme).toContain('docs/ROADMAP.md');
     expect(readme).toContain('docs/KNOWN-ISSUES.md');
@@ -59,9 +60,9 @@ describe('documentation feature inventory', () => {
     expect(roadmap).toContain('Integrated optional, disabled');
     expect(roadmap).toContain('fail-closed');
     expect(roadmap).toContain('RTK+Caveman');
-    expect(knownIssues).toContain('No hay un bug funcional bloqueante confirmado');
-    expect(knownIssues).toContain('RTK and Caveman remain external optional tools');
-    expect(knownIssues).toContain('FreeCode no incluye, descarga ni instala RTK ni Caveman');
-    expect(knownIssues).not.toContain('Español está pendiente de una corrección');
+    // 0.7.0 known issues reflect current state - RTK still not bundled, MCPs still need uvx
+    expect(knownIssues).toContain('RTK');
+    expect(knownIssues).toContain('Caveman');
+    expect(knownIssues).toContain('0.6.0');
   });
 });

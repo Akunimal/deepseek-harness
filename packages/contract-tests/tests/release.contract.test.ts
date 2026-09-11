@@ -35,7 +35,7 @@ describe('release and runtime packaging contracts', () => {
     expect(releaseGate).toContain("run('all workspace typechecks', ['typecheck'])");
     expect(releaseGate).toContain("run('fresh NSIS install and installed-runtime smoke'");
     expect(releaseGate).not.toContain('0.4.3 to candidate upgrade');
-    expect(rootPackage.version).toBe('0.6.0');
+    expect(rootPackage.version).toBe('0.7.0');
     expect(shellPackageJson.version).toBe(rootPackage.version);
   });
 
@@ -185,7 +185,8 @@ describe('release and runtime packaging contracts', () => {
     expect(supervisor).toContain('HIDDEN_CHILD_PROCESS_OPTIONS');
     expect(supervisor).toContain('windowsHide: true');
     expect(supervisor).toContain('shell: false');
-    expect(updater).toContain('windowsHide: true');
+    // Updater uses centralized launch seam (launchHiddenSync) which enforces windowsHide
+    expect(updater).toContain('launchHiddenSync');
     expect(mcpTransport).toContain('new StdioClientTransport');
     expect(mcpTransport).toContain("stderr: 'pipe'");
     expect(sdkStdio).toMatch(/windowsHide:\s+(?:process|node_process_1\.default)\.platform === 'win32'/);
