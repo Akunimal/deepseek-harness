@@ -1,4 +1,4 @@
-import { launchHiddenSync } from './freecode-launcher'
+import { launchHiddenSync } from './freecode-launcher.js'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
@@ -151,7 +151,8 @@ public static class FreecodeCred {
         timeout: 20_000,
       });
       if (r.status !== 0) return null;
-      const out = r.stdout.trim();
+      const stdout = typeof r.stdout === 'string' ? r.stdout : ''
+      const out = stdout.trim();
       return out.length > 0 ? out : null;
     },
     async deleteSecret(key) {

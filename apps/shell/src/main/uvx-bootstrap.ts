@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync, renameSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { launchHiddenSync } from './freecode-launcher'
+import { launchHiddenSync } from './freecode-launcher.js'
 
 /**
  * Product-managed uv bootstrap for Windows MCP servers.
@@ -39,17 +39,22 @@ function isWindowsExecutable(path: string): boolean {
 }
 
 function firstPathExecutable(name: string, env: NodeJS.ProcessEnv): string | undefined {
+  const cleanEnv: Record<string, string> = {}
+  for (const [k, v] of Object.entries(env)) {
+    if (v !== undefined) cleanEnv[k] = v
+  }
   const result = launchHiddenSync({
     executable: 'where.exe',
     args: [name],
     encoding: 'utf8',
-    env,
+    env: cleanEnv,
   })
   if (result.status !== 0 || result.error) return undefined
-  return result.stdout
+  const stdout = typeof result.stdout === 'string' ? result.stdout : ''
+  return stdout
     .split(/\r?\n/)
-    .map((line) => line.trim())
-    .find((candidate) => candidate.length > 0 && isWindowsExecutable(candidate))
+    .map((line: string) => line.trim())
+    .find((candidate: string) => candidate.length > 0 && isWindowsExecutable(candidate))
 }
 
 function findExtractedExecutable(root: string, name: string): string | undefined {

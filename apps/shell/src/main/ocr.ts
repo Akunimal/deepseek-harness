@@ -5,7 +5,7 @@
  * fallback, but a release package must carry its own payload.
  */
 
-import { launchHidden } from './freecode-launcher'
+import { launchHidden } from './freecode-launcher.js'
 import { existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -158,7 +158,7 @@ export async function extractText(
         fail(new Error(`Tesseract OCR timed out after ${timeoutMs}ms`));
       }, timeoutMs);
 
-      proc.on('close', (code) => {
+      proc.on('close', (code: number | null) => {
         clearTimeout(timer);
         if (settled) return;
         settled = true;
@@ -171,7 +171,7 @@ export async function extractText(
         }
       });
 
-      proc.on('error', (err) => {
+      proc.on('error', (err: Error) => {
         clearTimeout(timer);
         if (settled) return;
         settled = true;

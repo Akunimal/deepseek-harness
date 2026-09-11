@@ -69,7 +69,8 @@ export class McpReadinessTracker {
   /** Get the most recent call for a given server, or null if none. */
   getLastCall(serverId: string): McpCallRecord | null {
     for (let i = this.calls.length - 1; i >= 0; i--) {
-      if (this.calls[i].serverId === serverId) return this.calls[i]
+      const call = this.calls[i]
+      if (call && call.serverId === serverId) return call
     }
     return null
   }

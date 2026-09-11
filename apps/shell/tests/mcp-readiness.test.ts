@@ -29,8 +29,8 @@ describe('McpReadinessTracker', () => {
     tracker.recordCall(record)
     const calls = tracker.getCalls()
     expect(calls).toHaveLength(1)
-    expect(calls[0].requestId).toBe('req-1')
-    expect(calls[0].status).toBe('success')
+    expect(calls[0]!.requestId).toBe('req-1')
+    expect(calls[0]!.status).toBe('success')
   })
 
   it('filters calls by serverId', () => {
@@ -114,7 +114,7 @@ describe('McpReadinessTracker', () => {
     const calls = tracker.getCalls()
     expect(calls).toHaveLength(500)
     // First recorded should be dropped; oldest remaining is req-100
-    expect(calls[0].requestId).toBe('req-100')
+    expect(calls[0]!.requestId).toBe('req-100')
   })
 
   it('truncates long strings to 1024 chars', () => {
@@ -123,13 +123,13 @@ describe('McpReadinessTracker', () => {
     tracker.recordCall(record)
 
     const calls = tracker.getCalls()
-    expect(calls[0].requestId.length).toBe(1024)
-    expect(calls[0].error!.length).toBe(1024)
+    expect(calls[0]!.requestId.length).toBe(1024)
+    expect(calls[0]!.error!.length).toBe(1024)
   })
 
   it('preserves null toolName correctly', () => {
     tracker.recordCall(makeCall({ toolName: null }))
     const calls = tracker.getCalls()
-    expect(calls[0].toolName).toBeNull()
+    expect(calls[0]!.toolName).toBeNull()
   })
 })

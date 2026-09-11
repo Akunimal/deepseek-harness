@@ -12,7 +12,7 @@
 import { app, type App } from 'electron'
 import { existsSync, readFileSync, writeFileSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'
-import { launchHidden, killProcessTree } from './freecode-launcher'
+import { launchHidden, killProcessTree } from './freecode-launcher.js'
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -202,7 +202,7 @@ export async function healthProbe(
 // ── Lifecycle manager ──────────────────────────────────────────────
 
 export class LifecycleManager {
-  private config: Required<LifecycleManagerConfig>
+  private config: Required<Omit<LifecycleManagerConfig, 'log'>> & Pick<LifecycleManagerConfig, 'log'>
   private _state: LifecycleState = 'idle'
   private _generation = new GenerationTracker()
   private _bootFailures = 0

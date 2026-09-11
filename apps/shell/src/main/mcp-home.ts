@@ -88,7 +88,7 @@ function definitions(options: EmbeddedMcpOptions = {}): typeof BASE_SERVER_DEFIN
   return BASE_SERVER_DEFINITIONS.map((server) => {
     // Apply server-level overrides (vendored absolute paths take precedence)
     if (options.serverOverrides?.[server.id]) {
-      const override = options.serverOverrides[server.id]
+      const override = options.serverOverrides[server.id]!
       return {
         ...server,
         command: override.command,

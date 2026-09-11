@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { launchHiddenSync } from './freecode-launcher'
+import { launchHiddenSync } from './freecode-launcher.js'
 
 export interface ResourcePathOptions {
   packaged: boolean;
@@ -59,7 +59,8 @@ export function resolveNodePath(options: NodePathOptions): string {
     args: ['node'],
     encoding: 'utf8',
   });
-  const first = result.stdout.split(/\r?\n/)[0]?.trim();
+  const stdout = typeof result.stdout === 'string' ? result.stdout : ''
+  const first = stdout.split(/\r?\n/)[0]?.trim();
   return first || 'node';
 }
 

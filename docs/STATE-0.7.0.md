@@ -66,8 +66,8 @@ codex/0.7.0-remediation.
 | 4 | Supervisor generations, process trees and single-instance ownership | LOCKED | 64c6bbc66e | origin/main | docs/evidence/0.7.0/phase-04 | Race/fault tests prove one Electron/DSH/pool owner. |
 | 5 | Git resolver and sandbox error contract | LOCKED | 64c6bbc66e | origin/main | docs/evidence/0.7.0/phase-05 | Missing, denied, non-repo and valid Git cases classify correctly. |
 | 6 | MCP/Serena/free-search/Caveman/RTK readiness and UI status | VERIFIED | ab325ca545 | — | docs/evidence/0.7.0/phase-06 | Offline real tools, project activation, toggles and tray/status pass. |
-| 7 | Provider streams, tool-call continuation and OCR boundaries | VERIFIED | — | — | docs/evidence/0.7.0/phase-07 | 20/20 verify checks, 22/22 contract tests, stream/OCR invariants proven. |
-| 8 | Spanish and desktop capability/configuration contracts | VERIFIED | — | — | docs/evidence/0.7.0/phase-08 | 16/16 verify, 15/15 tests, locale/version/reasoning/UI contracts proven. |
+| 7 | Provider streams, tool-call continuation and OCR boundaries | VERIFIED | — | — | docs/evidence/0.7.0/phase-07 | 20/20 verify checks, 31/31 contract tests (13 stream + 18 OCR). |
+| 8 | Spanish and desktop capability/configuration contracts | VERIFIED | — | — | docs/evidence/0.7.0/phase-08 | 16/16 verify, 16/16 tests, locale/version/reasoning/UI contracts proven. |
 | 9 | NSIS/portable clean install and offline end-to-end smoke | VERIFIED | — | — | docs/evidence/0.7.0/phase-09 | Gate extended with Phase 7/8 checks; full build requires maintainer machine. |
 | 10 | Final Windows release certification | PLANNED | — | — | docs/evidence/0.7.0/phase-10 | All critical rows LOCKED; only then tag/release 0.7.0. |
 

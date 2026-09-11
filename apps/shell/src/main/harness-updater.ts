@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { launchHiddenSync } from './freecode-launcher'
+import { launchHiddenSync } from './freecode-launcher.js'
 import { tmpdir } from 'node:os';
 
 export interface HarnessUpdateInfo {

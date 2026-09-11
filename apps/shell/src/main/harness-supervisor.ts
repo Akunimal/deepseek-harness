@@ -1,4 +1,4 @@
-import { launchHidden, killProcessTree, type LaunchMetrics } from './freecode-launcher'
+import { launchHidden, killProcessTree, type LaunchMetrics } from './freecode-launcher.js'
 import type { ChildProcess } from 'node:child_process'
 import { join } from 'node:path';
 import { mkdirSync } from 'node:fs';
@@ -285,7 +285,7 @@ export class HarnessSupervisor {
         generation,
         requestId: `dsh-gen-${generation}`,
         closeReason: 'dsh-exit',
-        log: (level, msg, meta) => this.cfg.log?.(level, msg, meta),
+        log: (level: 'debug' | 'info' | 'warn' | 'error', msg: string, meta?: Record<string, unknown>) => this.cfg.log?.(level, msg, meta),
       });
       proc = launched;
     } catch (err) {

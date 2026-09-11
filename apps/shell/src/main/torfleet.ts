@@ -1,4 +1,4 @@
-import { launchHidden, killProcessTree, type LaunchMetrics } from './freecode-launcher'
+import { launchHidden, killProcessTree, type LaunchMetrics } from './freecode-launcher.js'
 import type { ChildProcess } from 'node:child_process'
 import { mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';

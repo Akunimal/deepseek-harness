@@ -1,7 +1,7 @@
 import { app, BrowserWindow, Menu, Tray, WebContentsView, nativeImage, Notification, dialog } from 'electron';
 import { join, resolve } from 'node:path';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { launchHidden, launchHiddenSync } from './freecode-launcher'
+import { launchHidden, launchHiddenSync } from './freecode-launcher.js'
 import type { McpRuntimeStatus } from '@freecode/shared-types';
 import { createShellRuntime, ShellRuntime } from './runtime.js';
 import { DEFAULT_POOL_SIZE } from '@freecode/opencode-adapter';
@@ -771,12 +771,12 @@ function runLocalUpstreamUpdate(): void {
     stdio: 'ignore',
     closeReason: 'local-update-exit',
   });
-  child.once('error', (error) => {
+  child.once('error', (error: NodeJS.ErrnoException) => {
     localUpdateRunning = false;
     appLogger?.logger.error({ err: error }, 'local upstream update failed to start');
     void dialog.showMessageBox({ type: 'error', title: t('update.localFailed.title'), message: error.message });
   });
-  child.once('close', (code) => {
+  child.once('close', (code: number | null) => {
     localUpdateRunning = false;
     if (code === 0) {
       void dialog.showMessageBox({ type: 'info', title: t('update.localComplete.title'), message: t('update.localComplete.message') });
