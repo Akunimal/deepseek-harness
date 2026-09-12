@@ -1,5 +1,9 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
 
 /** Versioned product-managed MCP catalog written into the app's DSH_HOME. */
 export const EMBEDDED_MCP_CONFIG_VERSION = 1
